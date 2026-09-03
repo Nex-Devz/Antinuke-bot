@@ -82,9 +82,11 @@ function buildStatusContainer(config, state, enabled) {
   const client = state?.client;
   const avatarUrl = client?.user?.displayAvatarURL({ size: 256 }) || '';
 
+  const tick = getEmoji('floovi_tick');
+  const cross = getEmoji('floovi_cross');
   const moduleList = Object.entries(config || {})
     .filter(([k, v]) => typeof v === 'object' && v !== null && 'enabled' in v)
-    .map(([k, v]) => `> ${v.enabled ? '\u2022' : '\u2022'} **${formatModuleName(k)}** — ${v.enabled ? 'ON' : 'OFF'}`)
+    .map(([k, v]) => `> ${v.enabled ? (tick || '\u2705') : (cross || '\u274C')} **${formatModuleName(k)}**`)
     .join('\n') || '> No modules configured';
 
   const status = enabled ? '**ACTIVE**' : '**DISABLED**';
