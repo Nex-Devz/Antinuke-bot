@@ -31,7 +31,7 @@ import { WhitelistManager } from './security/WhitelistManager.js';
 import { OwnerManager } from './security/OwnerManager.js';
 
 import { registerEvents } from './events/index.js';
-import { commandDefinitions, handleCommand, buildStatusContainer, buildButtons } from './commands/index.js';
+import { commandDefinitions, handleCommand, buildStatusContainer } from './commands/index.js';
 import { onReady } from './events/ready.js';
 
 console.log('[Luna] Starting up...');
@@ -105,8 +105,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
         const state = cache.get(guildId);
         state.client = interaction.client;
         const container = buildStatusContainer(config, state, true);
-        const buttons = buildButtons(true);
-        return interaction.update({ components: [container, buttons], flags: 32768 });
+        return interaction.update({ components: [container], flags: 32768 });
       }
 
       if (interaction.customId === 'antinuke_disable') {
@@ -120,8 +119,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
         const state = cache.get(guildId);
         state.client = interaction.client;
         const container = buildStatusContainer(config, state, false);
-        const buttons = buildButtons(false);
-        return interaction.update({ components: [container, buttons], flags: 32768 });
+        return interaction.update({ components: [container], flags: 32768 });
       }
 
       if (interaction.customId === 'antinuke_status') {
@@ -130,8 +128,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
         state.client = interaction.client;
         const enabled = config?.modules && Object.values(config.modules).some(v => v);
         const container = buildStatusContainer(config, state, enabled);
-        const buttons = buildButtons(enabled);
-        return interaction.update({ components: [container, buttons], flags: 32768 });
+        return interaction.update({ components: [container], flags: 32768 });
       }
     }
   } catch (error) {

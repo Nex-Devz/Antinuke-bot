@@ -115,6 +115,24 @@ function buildStatusContainer(config, state, enabled) {
       new TextDisplayBuilder().setContent(`**Last Scan:** <t:${Math.floor(Date.now() / 1000)}:R>\n[Zynrax Development](https://discord.gg/zynrax)`)
     );
 
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId('antinuke_enable')
+      .setLabel('Enable')
+      .setStyle(enabled ? ButtonStyle.Secondary : ButtonStyle.Success)
+      .setDisabled(enabled),
+    new ButtonBuilder()
+      .setCustomId('antinuke_disable')
+      .setLabel('Disable')
+      .setStyle(enabled ? ButtonStyle.Danger : ButtonStyle.Secondary)
+      .setDisabled(!enabled),
+    new ButtonBuilder()
+      .setCustomId('antinuke_status')
+      .setLabel('Refresh')
+      .setStyle(ButtonStyle.Primary)
+  );
+  container.addActionRowComponents(row);
+
   return container;
 }
 
@@ -181,8 +199,7 @@ async function handleCommand(interaction, context) {
       state.client = interaction.client;
       const enabled = config?.modules && Object.values(config.modules).some(v => v);
       const container = buildStatusContainer(config, state, enabled);
-      const buttons = buildButtons(enabled);
-      return interaction.reply({ components: [container, buttons], flags: 32768, ephemeral: true });
+      return interaction.reply({ components: [container], flags: 32768, ephemeral: true });
     }
 
     if (commandName === 'whitelist') {
@@ -273,4 +290,4 @@ async function handleCommand(interaction, context) {
   }
 }
 
-export { commandDefinitions, handleCommand, buildStatusContainer, buildButtons };
+export { commandDefinitions, handleCommand, buildStatusContainer };
