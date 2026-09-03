@@ -1,6 +1,8 @@
 export async function onReady(client, context) {
   console.log(`[AntiN8] Client ready as ${client.user.tag}`);
 
+  client.user.setActivity('your server | /antinuke', { type: 3 });
+
   const { cache, database, snapshotManager } = context;
 
   for (const [guildId, guild] of client.guilds.cache) {

@@ -70,7 +70,7 @@ const context = {
 
 registerEvents(client, context);
 
-const PREFIX = '!';
+const PREFIX = '&';
 
 client.on(Events.InteractionCreate, async (interaction) => {
   try {
@@ -131,11 +131,31 @@ client.on(Events.MessageCreate, async (message) => {
   if (message.mentions.has(client.user)) {
     const embed = {
       title: 'AntiN8',
-      description: '**Commands**\n`/antinuke enable` — Enable protection\n`/antinuke disable` — Disable protection\n`/antinuke status` — Show dashboard\n`/antinuke whitelist add @user` — Whitelist user\n`/antinuke whitelist remove @user` — Remove from whitelist\n`/antinuke owner add @user` — Add extra owner\n`/antinuke owner remove @user` — Remove extra owner\n`/antinuke lockdown` — Activate lockdown\n`/antinuke unlock` — Deactivate lockdown\n\n**Support**\n[discord.gg/zynrax](https://discord.gg/zynrax)',
+      description: '**Commands**\n`/antinuke enable` — Enable protection\n`/antinuke disable` — Disable protection\n`/antinuke status` — Show dashboard\n`/antinuke whitelist add @user` — Whitelist user\n`/antinuke whitelist remove @user` — Remove from whitelist\n`/antinuke owner add @user` — Add extra owner\n`/antinuke owner remove @user` — Remove extra owner\n`/antinuke lockdown` — Activate lockdown\n`/antinuke unlock` — Deactivate lockdown\n\n**Prefix**\n`&help` — Show commands\n`&ping` — Check latency\n\n**Support**\n[discord.gg/zynrax](https://discord.gg/zynrax)',
       color: 0x5865F2,
       footer: { text: 'Zynrax Development' }
     };
     return message.reply({ embeds: [embed] });
+  }
+
+  if (!message.content.startsWith(PREFIX)) return;
+  const args = message.content.slice(PREFIX.length).trim().split(/ +/);
+  const command = args.shift().toLowerCase();
+
+  if (command === 'help') {
+    const embed = {
+      title: 'AntiN8 Commands',
+      description: '`/antinuke enable` — Enable protection\n`/antinuke disable` — Disable protection\n`/antinuke status` — Show dashboard\n`/antinuke whitelist add @user` — Whitelist user\n`/antinuke whitelist remove @user` — Remove from whitelist\n`/antinuke owner add @user` — Add extra owner\n`/antinuke owner remove @user` — Remove extra owner\n`/antinuke lockdown` — Activate lockdown\n`/antinuke unlock` — Deactivate lockdown\n`&ping` — Check latency',
+      color: 0x5865F2,
+      footer: { text: 'Zynrax Development' }
+    };
+    return message.reply({ embeds: [embed] });
+  }
+
+  if (command === 'ping') {
+    const sent = await message.reply('Pinging...');
+    const latency = sent.createdTimestamp - message.createdTimestamp;
+    return sent.edit(`Pong! Latency: **${latency}ms** | API: **${Math.round(client.ws.ping)}ms**`);
   }
 });
 
