@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, PermissionFlagsBits, ActionRowBuilder, ButtonBuilder, ButtonStyle, ContainerBuilder, TextDisplayBuilder, SeparatorBuilder, SectionBuilder, ThumbnailBuilder } from 'discord.js';
+import { SlashCommandBuilder, PermissionFlagsBits, ActionRowBuilder, ButtonBuilder, ButtonStyle, ContainerBuilder, TextDisplayBuilder, SeparatorBuilder, SectionBuilder, ThumbnailBuilder, StringSelectMenuBuilder } from 'discord.js';
 import { getEmoji } from '../utils/emoji.js';
 
 const antinukeCommand = new SlashCommandBuilder()
@@ -9,6 +9,50 @@ const antinukeCommand = new SlashCommandBuilder()
 const whitelistCommand = new SlashCommandBuilder()
   .setName('whitelist')
   .setDescription('Whitelist management')
+  .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+  .addSubcommand(sub => sub
+    .setName('add')
+    .setDescription('Whitelist a user')
+    .addStringOption(opt => opt
+      .setName('user')
+      .setDescription('User ID or @mention')
+      .setRequired(true)))
+  .addSubcommand(sub => sub
+    .setName('remove')
+    .setDescription('Remove user from whitelist')
+    .addStringOption(opt => opt
+      .setName('user')
+      .setDescription('User ID or @mention')
+      .setRequired(true)))
+  .addSubcommand(sub => sub
+    .setName('list')
+    .setDescription('Show whitelisted users'));
+
+const wlCommand = new SlashCommandBuilder()
+  .setName('wl')
+  .setDescription('Whitelist management (alias)')
+  .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+  .addSubcommand(sub => sub
+    .setName('add')
+    .setDescription('Whitelist a user')
+    .addStringOption(opt => opt
+      .setName('user')
+      .setDescription('User ID or @mention')
+      .setRequired(true)))
+  .addSubcommand(sub => sub
+    .setName('remove')
+    .setDescription('Remove user from whitelist')
+    .addStringOption(opt => opt
+      .setName('user')
+      .setDescription('User ID or @mention')
+      .setRequired(true)))
+  .addSubcommand(sub => sub
+    .setName('list')
+    .setDescription('Show whitelisted users'));
+
+const trustCommand = new SlashCommandBuilder()
+  .setName('trust')
+  .setDescription('Whitelist management (alias)')
   .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
   .addSubcommand(sub => sub
     .setName('add')
@@ -63,6 +107,8 @@ const unlockCommand = new SlashCommandBuilder()
 const commandDefinitions = [
   antinukeCommand.toJSON(),
   whitelistCommand.toJSON(),
+  wlCommand.toJSON(),
+  trustCommand.toJSON(),
   coownerCommand.toJSON(),
   lockdownCommand.toJSON(),
   unlockCommand.toJSON()
@@ -84,8 +130,11 @@ function buildStatusContainer(config, state, enabled) {
 
   const tick = getEmoji('floovi_tick');
   const cross = getEmoji('floovi_cross');
-  const moduleList = Object.entries(config || {})
-    .filter(([k, v]) => typeof v === 'object' && v !== null && 'enabled' in v)
+
+  const modules = Object.entries(config || {})
+    .filter(([k, v]) => typeof v === 'object' && v !== null && 'enabled' in v);
+
+  const moduleList = modules
     .map(([k, v]) => `> ${v.enabled ? (tick || '\u2705') : (cross || '\u274C')} **${formatModuleName(k)}**`)
     .join('\n') || '> No modules configured';
 
@@ -124,6 +173,18 @@ function buildStatusContainer(config, state, enabled) {
       new TextDisplayBuilder().setContent(`**Whitelisted:** ${state.whitelist.size} | **Owners:** ${state.extraOwners.size}`)
     );
 
+  const moduleSelect = new StringSelectMenuBuilder()
+    .setCustomId('module_toggle')
+    .setPlaceholder('Toggle a module...')
+    .addOptions(
+      modules.slice(0, 25).map(([k, v]) => ({
+        label: formatModuleName(k),
+        description: `Currently ${v.enabled ? 'ON' : 'OFF'}`,
+        value: k,
+        emoji: v.enabled ? '\u2705' : '\u274C'
+      }))
+    );
+
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId('antinuke_enable')
@@ -141,6 +202,9 @@ function buildStatusContainer(config, state, enabled) {
       .setStyle(ButtonStyle.Primary)
   );
   container.addActionRowComponents(row);
+
+  const selectRow = new ActionRowBuilder().addComponents(moduleSelect);
+  container.addActionRowComponents(selectRow);
 
   container.addSeparatorComponents(new SeparatorBuilder());
   container.addTextDisplayComponents(

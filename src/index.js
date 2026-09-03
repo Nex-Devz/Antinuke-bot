@@ -211,6 +211,32 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
       return interaction.reply({ components: [container], flags: 32768, ephemeral: true });
     }
+
+    if (interaction.isStringSelectMenu() && interaction.customId === 'module_toggle') {
+      if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+        return interaction.reply({ content: 'Administrator permission required.', ephemeral: true });
+      }
+
+      const { database, cache } = context;
+      const guildId = interaction.guildId;
+      const moduleId = interaction.values[0];
+
+      let config = database.getGuildConfig(guildId);
+      if (!config) await database.initGuildConfig(guildId);
+      config = database.getGuildConfig(guildId);
+
+      if (config[moduleId] && typeof config[moduleId] === 'object') {
+        config[moduleId].enabled = !config[moduleId].enabled;
+        database.upsertSecurityConfig(guildId, config, new Date().toISOString());
+        cache.get(guildId).config = config;
+
+        const state = cache.get(guildId);
+        state.client = interaction.client;
+        const enabled = config && Object.values(config).some(v => typeof v === 'object' && v !== null && v.enabled === true);
+        const container = buildStatusContainer(config, state, enabled);
+        return interaction.update({ components: [container], flags: 32768 });
+      }
+    }
   } catch (error) {
     console.error('[Luna] Error:', error);
     const container = new ContainerBuilder()
