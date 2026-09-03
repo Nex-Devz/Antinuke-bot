@@ -192,12 +192,12 @@ client.on(Events.InteractionCreate, async (interaction) => {
       const value = interaction.values[0];
 
       const descriptions = {
-        antinuke: '**/antinuke** — Opens the security panel\n\nShows all protection modules with Enable/Disable buttons. Click Enable All to activate protection for your server.',
-        whitelist: '**/whitelist add @user** — Add user to whitelist\n**/whitelist remove @user** — Remove from whitelist\n**/whitelist list** — Show all whitelisted users\n\nWhitelisted users are immune to all protection actions.',
-        coowner: '**/coowner add @user** — Add extra owner\n**/coowner remove @user** — Remove extra owner\n**/coowner list** — Show all extra owners\n\nExtra owners have same permissions as the server owner.',
-        lockdown: '**/lockdown** — Activate lockdown mode\n\nDisables all modules and puts server on high alert. Only admins can manage.',
-        unlock: '**/unlock** — Deactivate lockdown\n\nReturns protection to normal operation.',
-        ping: '**&ping** — Check bot latency\n\nShows message latency and API response time.'
+        antinuke: '**/antinuke** — Opens the security panel\n\nThe main control panel for Luna. Shows all 20 protection modules with their current status (ON/OFF). You can Enable All modules at once or Disable All. The panel auto-refreshes when you make changes.\n\nModules include: Channel, Role, Permission, Webhook, Emoji, Sticker, Ban, Kick, Member Role, Admin Escalation, Bot, Integration, Auto Mod, Scheduled Event, Invite, Invite Role, Linked Role, Raid, Mass Mention, and Emergency Lockdown.',
+        whitelist: '**/whitelist** — Manage whitelisted users\n\n`/whitelist add @user` — Add a user to the whitelist\n`/whitelist remove @user` — Remove a user from whitelist\n`/whitelist list` — View all whitelisted users\n\nWhitelisted users are completely immune to all protection actions. They can perform any action without triggering alerts or punishments. Use this for trusted moderators and staff members.',
+        coowner: '**/coowner** — Manage extra owners\n\n`/coowner add @user` — Add an extra owner\n`/coowner remove @user` — Remove an extra owner\n`/coowner list` — View all extra owners\n\nExtra owners have the same level of permissions as the server owner. They can manage all security settings, whitelist users, and control lockdown. Use this for your most trusted administrators.',
+        lockdown: '**/lockdown** — Activate lockdown mode\n\nImmediately disables all protection modules and puts the server on high alert. During lockdown, no protection actions are taken but all suspicious activity is logged.\n\nThis is useful when you need to perform maintenance or when the bot is giving false positives. Only administrators can activate or deactivate lockdown.',
+        unlock: '**/unlock** — Deactivate lockdown\n\nReturns all protection modules to their previous state. The server goes back to normal operation with all protections active.\n\nMake sure to review any logged incidents after deactivating lockdown to ensure nothing was missed during the lockdown period.',
+        ping: '**&ping** — Check bot latency\n\nShows the current message latency (how long it takes for the bot to respond) and the Discord API response time.\n\nGood latency values:\n- Under 100ms: Excellent\n- 100-200ms: Good\n- 200-400ms: Fair\n- Over 400ms: Poor'
       };
 
       const container = new ContainerBuilder()
@@ -287,7 +287,7 @@ client.on(Events.MessageCreate, async (message) => {
     container
       .addSeparatorComponents(new SeparatorBuilder())
       .addTextDisplayComponents(
-        new TextDisplayBuilder().setContent('Select a command from the dropdown below to see details')
+        new TextDisplayBuilder().setContent('Luna is a powerful anti-nuke bot designed to protect your Discord server from malicious attacks, raiders, and abuse. With 20+ security modules running 24/7, your server stays safe from channel deletes, role wipes, mass bans, webhook spam, and more.\n\nSelect a command from the dropdown below to see detailed information about each feature.')
       )
       .addSeparatorComponents(new SeparatorBuilder())
       .addTextDisplayComponents(
@@ -306,9 +306,10 @@ client.on(Events.MessageCreate, async (message) => {
         { label: '&ping', description: 'Check bot latency', value: 'ping' }
       );
 
-    const row = new ActionRowBuilder().addComponents(select);
+    const selectRow = new ActionRowBuilder().addComponents(select);
+    container.addActionRowComponents(selectRow);
 
-    return message.reply({ components: [container, row], flags: 32768 });
+    return message.reply({ components: [container], flags: 32768 });
   }
 
   if (command === 'ping') {
