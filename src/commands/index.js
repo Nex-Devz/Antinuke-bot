@@ -68,6 +68,16 @@ const commandDefinitions = [
   unlockCommand.toJSON()
 ];
 
+function formatModuleName(name) {
+  return name
+    .replace(/^anti/, '')
+    .replace(/([A-Z])/g, ' $1')
+    .trim()
+    .split(' ')
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(' ');
+}
+
 function buildStatusContainer(config, state, enabled) {
   const client = state?.client;
   const avatarUrl = client?.user?.displayAvatarURL({ size: 256 }) || '';
@@ -76,7 +86,7 @@ function buildStatusContainer(config, state, enabled) {
   const cross = getEmoji('floovi_cross');
   const moduleList = Object.entries(config || {})
     .filter(([k, v]) => typeof v === 'object' && v !== null && 'enabled' in v)
-    .map(([k, v]) => `${v.enabled ? (tick || '\u2705') : (cross || '\u274C')} ${k}`)
+    .map(([k, v]) => `${v.enabled ? (tick || '\u2705') : (cross || '\u274C')} **${formatModuleName(k)}**`)
     .join('\n') || 'No modules configured';
 
   const container = new ContainerBuilder();
@@ -110,31 +120,39 @@ function buildStatusContainer(config, state, enabled) {
     .addSeparatorComponents(new SeparatorBuilder())
     .addTextDisplayComponents(
       new TextDisplayBuilder().setContent(
-        `**Protected Roles:** ${state.protectedRoles.size} | **Protected Channels:** ${state.protectedChannels.size}\n**Whitelisted:** ${state.whitelist.size} | **Extra Owners:** ${state.extraOwners.size}\n**Lockdown:** ${config?.lockdown ? 'Active' : 'Inactive'}`
+        `**Roles:** ${state.protectedRoles.size} | **Channels:** ${state.protectedChannels.size} | **Webhooks:** ${state.protectedWebhooks.size}\n**Whitelisted:** ${state.whitelist.size} | **Owners:** ${state.extraOwners.size}\n**Lockdown:** ${config?.lockdown ? 'Active' : 'Inactive'}`
       )
     )
     .addSeparatorComponents(new SeparatorBuilder())
     .addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(`**Last Scan:** <t:${Math.floor(Date.now() / 1000)}:R>\n[Zynrax Development](https://discord.gg/zynrax)`)
+      new TextDisplayBuilder().setContent(`**Last Scan:** <t:${Math.floor(Date.now() / 1000)}:R>`)
     );
 
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId('antinuke_enable')
-      .setLabel('Enable')
-      .setStyle(enabled ? ButtonStyle.Secondary : ButtonStyle.Success)
+      .setLabel('Enable All')
+      .setEmoji('\u2705')
+      .setStyle(ButtonStyle.Success)
       .setDisabled(enabled),
     new ButtonBuilder()
       .setCustomId('antinuke_disable')
-      .setLabel('Disable')
-      .setStyle(enabled ? ButtonStyle.Danger : ButtonStyle.Secondary)
+      .setLabel('Disable All')
+      .setEmoji('\u274C')
+      .setStyle(ButtonStyle.Danger)
       .setDisabled(!enabled),
     new ButtonBuilder()
       .setCustomId('antinuke_status')
       .setLabel('Refresh')
+      .setEmoji('\uD83D\uDD04')
       .setStyle(ButtonStyle.Primary)
   );
   container.addActionRowComponents(row);
+
+  container.addSeparatorComponents(new SeparatorBuilder());
+  container.addTextDisplayComponents(
+    new TextDisplayBuilder().setContent('[Zynrax Development](https://discord.gg/zynrax)')
+  );
 
   return container;
 }
