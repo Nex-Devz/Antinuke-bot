@@ -98,8 +98,11 @@ client.on(Events.InteractionCreate, async (interaction) => {
         let config = database.getGuildConfig(guildId);
         if (!config) await database.initGuildConfig(guildId);
         config = database.getGuildConfig(guildId);
-        if (!config.modules) config.modules = {};
-        Object.keys(config.modules).forEach(k => config.modules[k] = true);
+        Object.keys(config).forEach(k => {
+          if (typeof config[k] === 'object' && config[k] !== null && 'enabled' in config[k]) {
+            config[k].enabled = true;
+          }
+        });
         database.upsertSecurityConfig(guildId, config, new Date().toISOString());
         cache.get(guildId).config = config;
         const state = cache.get(guildId);
@@ -112,9 +115,15 @@ client.on(Events.InteractionCreate, async (interaction) => {
         if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
           return interaction.reply({ content: 'Administrator permission required.', ephemeral: true });
         }
-        const config = database.getGuildConfig(guildId);
-        if (config?.modules) Object.keys(config.modules).forEach(k => config.modules[k] = false);
-        if (config) database.upsertSecurityConfig(guildId, config, new Date().toISOString());
+        let config = database.getGuildConfig(guildId);
+        if (!config) await database.initGuildConfig(guildId);
+        config = database.getGuildConfig(guildId);
+        Object.keys(config).forEach(k => {
+          if (typeof config[k] === 'object' && config[k] !== null && 'enabled' in config[k]) {
+            config[k].enabled = false;
+          }
+        });
+        database.upsertSecurityConfig(guildId, config, new Date().toISOString());
         cache.get(guildId).config = config;
         const state = cache.get(guildId);
         state.client = interaction.client;
@@ -126,7 +135,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
         const config = database.getGuildConfig(guildId);
         const state = cache.get(guildId);
         state.client = interaction.client;
-        const enabled = config?.modules && Object.values(config.modules).some(v => v);
+        const enabled = config && Object.values(config).some(v => typeof v === 'object' && v !== null && v.enabled === true);
         const container = buildStatusContainer(config, state, enabled);
         return interaction.update({ components: [container], flags: 32768 });
       }

@@ -71,9 +71,9 @@ function buildStatusContainer(config, state, enabled) {
   const client = state?.client;
   const avatarUrl = client?.user?.displayAvatarURL({ size: 256 }) || '';
 
-  const modules = config?.modules || {};
-  const moduleList = Object.entries(modules)
-    .map(([k, v]) => `${v ? '\u2705' : '\u274C'} ${k}`)
+  const moduleList = Object.entries(config || {})
+    .filter(([k, v]) => typeof v === 'object' && v !== null && 'enabled' in v)
+    .map(([k, v]) => `${v.enabled ? '\u2705' : '\u274C'} ${k}`)
     .join('\n') || 'No modules configured';
 
   const container = new ContainerBuilder();
@@ -197,7 +197,7 @@ async function handleCommand(interaction, context) {
       const config = database.getGuildConfig(guildId);
       const state = cache.get(guildId);
       state.client = interaction.client;
-      const enabled = config?.modules && Object.values(config.modules).some(v => v);
+      const enabled = config && Object.values(config).some(v => typeof v === 'object' && v !== null && v.enabled === true);
       const container = buildStatusContainer(config, state, enabled);
       return interaction.reply({ components: [container], flags: 32768, ephemeral: true });
     }
