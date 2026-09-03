@@ -1,28 +1,39 @@
 <div align="center">
 
-<img src="https://discordapp.com/api/guilds/1415328129521815696/widget.png?style=banner4" alt="Zynrax Development" width="400" />
+<table>
+<tr>
+<td align="center" width="9999" bgcolor="#1a1b26">
 
-<br>
-
-# ANTI N8
-
-### Discord Anti-Nuke & Anti-Abuse Security Bot
-
-<br>
-
-![Online](https://img.shields.io/badge/ONLINE-3BA55C?style=flat-square&logo=discord&logoColor=white)
-![Members](https://img.shields.io/discord/members/1415328129521815696?style=flat-square&color=5865F2&logo=discord&logoColor=white)
-![Version](https://img.shields.io/badge/VERSION-1.0.0-blue?style=flat-square)
-![License](https://img.shields.io/badge/LICENSE-MIT-yellow?style=flat-square)
-![Node.js](https://img.shields.io/badge/NODE.JS-18%2B-339933?style=flat-square&logo=node.js&logoColor=white)
+<img src="https://img.shields.io/badge/ANTI_N8-0D1117?style=for-the-badge&labelColor=0D1117&color=5865F2" alt="AntiN8" />
 
 <br><br>
 
-**Production-grade server protection by Zynrax Development**
+# **ANTI N8**
 
 <br>
 
-[![Join Server](https://img.shields.io/badge/JOIN_DISCORD-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/zynrax)
+### `> Discord Anti-Nuke & Anti-Abuse Security Bot`
+
+<br>
+
+<img src="https://img.shields.io/badge/ONLINE-3BA55C?style=flat-square&logo=discord&logoColor=white" />
+<img src="https://img.shields.io/discord/members/1415328129521815696?style=flat-square&color=5865F2&logo=discord&logoColor=white" />
+<img src="https://img.shields.io/badge/VERSION-1.0.0-blue?style=flat-square" />
+<img src="https://img.shields.io/badge/NODE.JS-18%2B-339933?style=flat-square&logo=node.js&logoColor=white" />
+<img src="https://img.shields.io/badge/DISCORD.JS-14-5865F2?style=flat-square&logo=discord&logoColor=white" />
+<img src="https://img.shields.io/badge/LICENSE-MIT-yellow?style=flat-square" />
+
+<br><br>
+
+`Built by Zynrax Development`
+
+<br>
+
+<img src="https://img.shields.io/badge/JOIN_SERVER-5865F2?style=for-the-badge&logo=discord&logoColor=white&link=https://discord.gg/zynrax" />
+
+</td>
+</tr>
+</table>
 
 </div>
 
@@ -230,18 +241,24 @@ No Redis. No MongoDB. No TypeScript. No polling.
 
 ---
 
-<div align="center">
+<table>
+<tr>
+<td align="center" width="9999" bgcolor="#1a1b26">
 
-## Support
+<br>
 
-[![Join Server](https://img.shields.io/badge/JOIN_DISCORD-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/zynrax)
+### Support
+
+<img src="https://img.shields.io/badge/JOIN_DISCORD-5865F2?style=for-the-badge&logo=discord&logoColor=white" />
 
 For questions, bug reports, or feature requests — join the server or open an issue.
 
 <br>
 
----
+`Built with care by Zynrax Development`
 
-**Built with care by Zynrax Development**
+<br>
 
-</div>
+</td>
+</tr>
+</table>
