@@ -151,7 +151,7 @@ client.on(Events.MessageCreate, async (message) => {
         new SeparatorBuilder()
       )
       .addTextDisplayComponents(
-        new TextDisplayBuilder().setContent('**Support Server**\n[discord.gg/zynrax](https://discord.gg/zynrax)\n\nMade by **Zynrax Development**')
+        new TextDisplayBuilder().setContent('[Zynrax Development](https://discord.gg/zynrax)')
       );
 
     return message.reply({
