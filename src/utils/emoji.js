@@ -1,264 +1,140 @@
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
-import { join, dirname } from 'path';
+import fs from 'fs';
+import path from 'path';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+const __dirname = path.dirname(__filename);
 
-const DATA_DIR = join(__dirname, '..', '..', 'data');
-const EMOJI_CONFIG_PATH = join(DATA_DIR, 'emojis.json');
+const EMOJI_FILE_PATH = path.join(__dirname, '..', 'config', 'emoji.js');
 
-let cachedEmojis = {};
+const headers = {};
 
-function loadCache() {
+function parseEmojis(content) {
+  const emojiRegex = /<(a)?:([\w]+):(\d+)>/g;
+  return [...content.matchAll(emojiRegex)].map(m => ({
+    full: m[0],
+    animated: Boolean(m[1]),
+    name: m[2],
+    id: m[3]
+  }));
+}
+
+async function setupEmojis(client) {
+  const token = client.token;
+  if (!token) return;
+
+  headers.Authorization = `Bot ${token}`;
+  headers['Content-Type'] = 'application/json';
+
+  console.log('[Luna] Setting up application emojis...');
+
+  const appRes = await fetch('https://discord.com/api/v10/oauth2/applications/@me', { headers });
+  if (!appRes.ok) {
+    console.error('[Luna] Failed to fetch application info');
+    return;
+  }
+  const appData = await appRes.json();
+  const appId = appData.id;
+
+  const existingRes = await fetch(`https://discord.com/api/v10/applications/${appId}/emojis`, { headers });
+  let existingEmojis = [];
+  if (existingRes.ok) {
+    const resData = await existingRes.json();
+    existingEmojis = resData.items || [];
+  }
+
+  const existingMap = new Map();
+  for (const e of existingEmojis) {
+    existingMap.set(e.name, e);
+  }
+
+  let emojiFileContent;
   try {
-    if (existsSync(EMOJI_CONFIG_PATH)) {
-      cachedEmojis = JSON.parse(readFileSync(EMOJI_CONFIG_PATH, 'utf8'));
-    }
+    emojiFileContent = fs.readFileSync(EMOJI_FILE_PATH, 'utf8');
   } catch {
-    cachedEmojis = {};
-  }
-}
-
-function createMinimalPNG(r, g, b) {
-  const size = 128;
-  const raw = [];
-  for (let y = 0; y < size; y++) {
-    raw.push(0);
-    for (let x = 0; x < size; x++) {
-      const dx = x - 63.5, dy = y - 63.5;
-      if (dx * dx + dy * dy < 58 * 58) {
-        raw.push(r, g, b, 255);
-      } else {
-        raw.push(0, 0, 0, 0);
-      }
-    }
+    console.error('[Luna] Could not read emoji config file');
+    return;
   }
 
-  const width = Buffer.alloc(4);
-  width.writeUInt32BE(size);
-  const height = Buffer.alloc(4);
-  height.writeUInt32BE(size);
+  const emojis = parseEmojis(emojiFileContent);
+  const replacements = new Map();
 
-  const ihdrData = Buffer.concat([
-    width, height,
-    Buffer.from([8, 6, 0, 0, 0]),
-  ]);
+  for (const emoji of emojis) {
+    if (replacements.has(emoji.full)) continue;
 
-  const ihdr = Buffer.concat([
-    Buffer.from([13]),
-    Buffer.from('IHDR'),
-    ihdrData,
-    crc32(Buffer.concat([Buffer.from('IHDR'), ihdrData]))
-  ]);
+    let newEmojiObj = existingMap.get(emoji.name);
 
-  const deflated = deflateSync(Buffer.from(raw));
+    if (!newEmojiObj) {
+      try {
+        const ext = emoji.animated ? 'gif' : 'png';
+        const cdnUrl = `https://cdn.discordapp.com/emojis/${emoji.id}.${ext}`;
+        const imgRes = await fetch(cdnUrl);
+        if (!imgRes.ok) {
+          console.error(`[Luna] Failed to download ${emoji.name}`);
+          continue;
+        }
+        const buffer = Buffer.from(await imgRes.arrayBuffer());
+        const mimeType = emoji.animated ? 'image/gif' : 'image/png';
+        const dataUri = `data:${mimeType};base64,${buffer.toString('base64')}`;
 
-  const idat = Buffer.concat([
-    Buffer.alloc(4),
-    Buffer.from('IDAT'),
-    deflated,
-  ]);
-  idat.writeUInt32BE(deflated.length);
+        const uploadRes = await fetch(`https://discord.com/api/v10/applications/${appId}/emojis`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ name: emoji.name, image: dataUri })
+        });
 
-  const iend = Buffer.concat([
-    Buffer.alloc(4),
-    Buffer.from('IEND'),
-    crc32(Buffer.from('IEND')),
-  ]);
+        if (!uploadRes.ok) {
+          console.error(`[Luna] Failed to upload ${emoji.name}: ${await uploadRes.text()}`);
+          continue;
+        }
 
-  const signature = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
-  return Buffer.concat([signature, ihdr, idat, iend]);
-}
-
-function deflateSync(data) {
-  const chunks = [];
-  let pos = 0;
-
-  while (pos < data.length) {
-    const isLast = pos + 32768 >= data.length;
-    const blockData = data.slice(pos, pos + 32768);
-
-    const header = Buffer.alloc(5);
-    header.writeUInt8(isLast ? 1 : 0);
-    header.writeUInt16LE(blockData.length);
-    header.writeUInt16LE(blockData.length ^ 0xFFFF);
-
-    const stored = Buffer.concat([header, blockData]);
-    chunks.push(stored);
-    pos += 32768;
-  }
-
-  const result = Buffer.concat(chunks);
-  const zlibHeader = Buffer.from([0x78, 0x01]);
-  return Buffer.concat([zlibHeader, result]);
-}
-
-function crc32(buf) {
-  let crc = 0xFFFFFFFF;
-  for (let i = 0; i < buf.length; i++) {
-    crc ^= buf[i];
-    for (let j = 0; j < 8; j++) {
-      crc = (crc >>> 1) ^ (crc & 1 ? 0xEDB88320 : 0);
-    }
-  }
-  const result = Buffer.alloc(4);
-  result.writeUInt32BE((crc ^ 0xFFFFFFFF) >>> 0);
-  return result;
-}
-
-function generateTickPNG() {
-  const size = 128;
-  const pixels = [];
-
-  for (let y = 0; y < size; y++) {
-    pixels.push(0);
-    for (let x = 0; x < size; x++) {
-      const dx = x - 63.5, dy = y - 63.5;
-      const inCircle = dx * dx + dy * dy < 58 * 58;
-
-      const tx = x - 35, ty = y - 70;
-      const inTick = (
-        (tx >= 0 && tx <= 20 && ty >= -5 && ty <= 5) ||
-        (tx >= 15 && tx <= 55 && ty >= tx - 25 - 5 && ty <= tx - 25 + 5)
-      ) && tx >= 0 && tx <= 60 && ty >= -10 && ty <= 5;
-
-      if (inCircle && inTick) {
-        pixels.push(255, 255, 255, 255);
-      } else if (inCircle) {
-        pixels.push(87, 242, 135, 255);
-      } else {
-        pixels.push(0, 0, 0, 0);
-      }
-    }
-  }
-
-  return buildPNG(size, pixels);
-}
-
-function generateCrossPNG() {
-  const size = 128;
-  const pixels = [];
-
-  for (let y = 0; y < size; y++) {
-    pixels.push(0);
-    for (let x = 0; x < size; x++) {
-      const dx = x - 63.5, dy = y - 63.5;
-      const inCircle = dx * dx + dy * dy < 58 * 58;
-
-      const inLine1 = Math.abs(x - y) < 8;
-      const inLine2 = Math.abs(x + y - 127) < 8;
-      const inCross = (inLine1 || inLine2) && Math.abs(dx) < 45 && Math.abs(dy) < 45;
-
-      if (inCircle && inCross) {
-        pixels.push(255, 255, 255, 255);
-      } else if (inCircle) {
-        pixels.push(237, 66, 69, 255);
-      } else {
-        pixels.push(0, 0, 0, 0);
-      }
-    }
-  }
-
-  return buildPNG(size, pixels);
-}
-
-function buildPNG(size, pixels) {
-  const raw = Buffer.from(pixels);
-
-  const width = Buffer.alloc(4);
-  width.writeUInt32BE(size);
-  const height = Buffer.alloc(4);
-  height.writeUInt32BE(size);
-
-  const ihdrData = Buffer.concat([
-    width, height,
-    Buffer.from([8, 6, 0, 0, 0]),
-  ]);
-
-  const ihdr = Buffer.concat([
-    Buffer.from([13]),
-    Buffer.from('IHDR'),
-    ihdrData,
-    crc32(Buffer.concat([Buffer.from('IHDR'), ihdrData]))
-  ]);
-
-  const deflated = deflateSync(raw);
-
-  const idatData = deflated;
-  const idat = Buffer.concat([
-    Buffer.alloc(4),
-    Buffer.from('IDAT'),
-    idatData,
-  ]);
-  idat.writeUInt32BE(idatData.length);
-
-  const iend = Buffer.concat([
-    Buffer.alloc(4),
-    Buffer.from('IEND'),
-    crc32(Buffer.from('IEND')),
-  ]);
-
-  const signature = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
-  return Buffer.concat([signature, ihdr, idat, iend]);
-}
-
-export async function setupEmojis(client) {
-  loadCache();
-
-  const appId = client.application?.id;
-  if (!appId) return cachedEmojis;
-
-  try {
-    const res = await fetch(`https://discord.com/api/v10/applications/${appId}/emojis`, {
-      headers: { 'Authorization': `Bot ${client.token}` }
-    });
-    if (!res.ok) return cachedEmojis;
-
-    const data = await res.json();
-    const existing = data.items || [];
-
-    const defs = [
-      { name: 'luna_tick', generator: generateTickPNG },
-      { name: 'luna_cross', generator: generateCrossPNG }
-    ];
-
-    for (const def of defs) {
-      const found = existing.find(e => e.name === def.name);
-      if (found) {
-        cachedEmojis[def.name] = `<:${found.name}:${found.id}>`;
+        newEmojiObj = await uploadRes.json();
+        console.log(`[Luna] Uploaded ${emoji.name}: ${newEmojiObj.id}`);
+        existingMap.set(emoji.name, newEmojiObj);
+      } catch (err) {
+        console.error(`[Luna] Error uploading ${emoji.name}:`, err.message);
         continue;
       }
-
-      const imageBuffer = def.generator();
-      const base64 = imageBuffer.toString('base64');
-      const dataUrl = `data:image/png;base64,${base64}`;
-
-      const uploadRes = await fetch(`https://discord.com/api/v10/applications/${appId}/emojis`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bot ${client.token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ name: def.name, image: dataUrl })
-      });
-
-      if (uploadRes.ok) {
-        const emoji = await uploadRes.json();
-        cachedEmojis[def.name] = `<:${emoji.name}:${emoji.id}>`;
-        console.log(`[Luna] Uploaded emoji ${def.name}: ${emoji.id}`);
-      }
     }
 
-    mkdirSync(DATA_DIR, { recursive: true });
-    writeFileSync(EMOJI_CONFIG_PATH, JSON.stringify(cachedEmojis, null, 2));
-  } catch (error) {
-    console.error('[Luna] Emoji setup error:', error.message);
+    if (newEmojiObj && newEmojiObj.id) {
+      const prefix = emoji.animated ? 'a' : '';
+      const newTag = `<${prefix}:${emoji.name}:${newEmojiObj.id}>`;
+      replacements.set(emoji.full, newTag);
+    }
   }
 
-  return cachedEmojis;
+  if (replacements.size > 0) {
+    let updatedContent = emojiFileContent;
+    for (const [oldTag, newTag] of replacements.entries()) {
+      updatedContent = updatedContent.replaceAll(oldTag, newTag);
+    }
+    fs.writeFileSync(EMOJI_FILE_PATH, updatedContent, 'utf8');
+    console.log(`[Luna] Updated ${replacements.size} emojis in config`);
+  }
+
+  console.log('[Luna] Emoji setup complete');
 }
 
-export function getEmoji(name) {
-  return cachedEmojis[name] || '';
+let emojiCache = {};
+
+function loadEmojiCache() {
+  try {
+    const content = fs.readFileSync(EMOJI_FILE_PATH, 'utf8');
+    const emojis = parseEmojis(content);
+    for (const emoji of emojis) {
+      emojiCache[emoji.name] = emoji.full;
+    }
+  } catch {
+    emojiCache = {};
+  }
 }
+
+function getEmoji(name) {
+  if (Object.keys(emojiCache).length === 0) {
+    loadEmojiCache();
+  }
+  return emojiCache[name] || '';
+}
+
+export { setupEmojis, getEmoji };

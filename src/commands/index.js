@@ -72,8 +72,8 @@ function buildStatusContainer(config, state, enabled) {
   const client = state?.client;
   const avatarUrl = client?.user?.displayAvatarURL({ size: 256 }) || '';
 
-  const tick = getEmoji('luna_tick');
-  const cross = getEmoji('luna_cross');
+  const tick = getEmoji('floovi_tick');
+  const cross = getEmoji('floovi_cross');
   const moduleList = Object.entries(config || {})
     .filter(([k, v]) => typeof v === 'object' && v !== null && 'enabled' in v)
     .map(([k, v]) => `${v.enabled ? (tick || '\u2705') : (cross || '\u274C')} ${k}`)
