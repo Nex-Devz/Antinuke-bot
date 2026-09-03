@@ -133,6 +133,109 @@ client.on(Events.InteractionCreate, async (interaction) => {
         const buttons = buildButtons(enabled);
         return interaction.update({ components: [container, buttons], flags: 32768 });
       }
+
+      if (interaction.customId === 'help_enable') {
+        if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+          return interaction.reply({ content: 'Administrator permission required.', ephemeral: true });
+        }
+        let config = database.getGuildConfig(guildId);
+        if (!config) await database.initGuildConfig(guildId);
+        config = database.getGuildConfig(guildId);
+        if (!config.modules) config.modules = {};
+        Object.keys(config.modules).forEach(k => config.modules[k] = true);
+        database.upsertSecurityConfig(guildId, config, new Date().toISOString());
+        cache.get(guildId).config = config;
+        const container = new ContainerBuilder()
+          .addTextDisplayComponents(
+            new TextDisplayBuilder().setContent('# Luna\nProtection **enabled** successfully.')
+          )
+          .addSeparatorComponents(new SeparatorBuilder())
+          .addTextDisplayComponents(
+            new TextDisplayBuilder().setContent('[Zynrax Development](https://discord.gg/zynrax)')
+          );
+        return interaction.reply({ components: [container], flags: 32768, ephemeral: true });
+      }
+
+      if (interaction.customId === 'help_disable') {
+        if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+          return interaction.reply({ content: 'Administrator permission required.', ephemeral: true });
+        }
+        const config = database.getGuildConfig(guildId);
+        if (config?.modules) Object.keys(config.modules).forEach(k => config.modules[k] = false);
+        if (config) database.upsertSecurityConfig(guildId, config, new Date().toISOString());
+        cache.get(guildId).config = config;
+        const container = new ContainerBuilder()
+          .addTextDisplayComponents(
+            new TextDisplayBuilder().setContent('# Luna\nProtection **disabled** successfully.')
+          )
+          .addSeparatorComponents(new SeparatorBuilder())
+          .addTextDisplayComponents(
+            new TextDisplayBuilder().setContent('[Zynrax Development](https://discord.gg/zynrax)')
+          );
+        return interaction.reply({ components: [container], flags: 32768, ephemeral: true });
+      }
+
+      if (interaction.customId === 'help_lockdown') {
+        if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+          return interaction.reply({ content: 'Administrator permission required.', ephemeral: true });
+        }
+        database.setLockdown(guildId, true);
+        const state = cache.get(guildId);
+        if (state.config) state.config.lockdown = true;
+        const container = new ContainerBuilder()
+          .addTextDisplayComponents(
+            new TextDisplayBuilder().setContent('# Luna\nLockdown **activated**.')
+          )
+          .addSeparatorComponents(new SeparatorBuilder())
+          .addTextDisplayComponents(
+            new TextDisplayBuilder().setContent('All modules have been disabled and server is on high alert.')
+          )
+          .addSeparatorComponents(new SeparatorBuilder())
+          .addTextDisplayComponents(
+            new TextDisplayBuilder().setContent('[Zynrax Development](https://discord.gg/zynrax)')
+          );
+        return interaction.reply({ components: [container], flags: 32768, ephemeral: true });
+      }
+
+      if (interaction.customId === 'help_unlock') {
+        if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+          return interaction.reply({ content: 'Administrator permission required.', ephemeral: true });
+        }
+        database.setLockdown(guildId, false);
+        const state = cache.get(guildId);
+        if (state.config) state.config.lockdown = false;
+        const container = new ContainerBuilder()
+          .addTextDisplayComponents(
+            new TextDisplayBuilder().setContent('# Luna\nLockdown **deactivated**.')
+          )
+          .addSeparatorComponents(new SeparatorBuilder())
+          .addTextDisplayComponents(
+            new TextDisplayBuilder().setContent('Protection is back to normal operation.')
+          )
+          .addSeparatorComponents(new SeparatorBuilder())
+          .addTextDisplayComponents(
+            new TextDisplayBuilder().setContent('[Zynrax Development](https://discord.gg/zynrax)')
+          );
+        return interaction.reply({ components: [container], flags: 32768, ephemeral: true });
+      }
+
+      if (interaction.customId === 'help_ping') {
+        const latency = interaction.createdTimestamp - Date.now();
+        const apiLatency = Math.round(interaction.client.ws.ping);
+        const container = new ContainerBuilder()
+          .addTextDisplayComponents(
+            new TextDisplayBuilder().setContent('# Pong!')
+          )
+          .addSeparatorComponents(new SeparatorBuilder())
+          .addTextDisplayComponents(
+            new TextDisplayBuilder().setContent(`**Latency:** ${latency}ms\n**API:** ${apiLatency}ms`)
+          )
+          .addSeparatorComponents(new SeparatorBuilder())
+          .addTextDisplayComponents(
+            new TextDisplayBuilder().setContent('[Zynrax Development](https://discord.gg/zynrax)')
+          );
+        return interaction.reply({ components: [container], flags: 32768, ephemeral: true });
+      }
     }
   } catch (error) {
     console.error('[Luna] Error:', error);
@@ -210,19 +313,30 @@ client.on(Events.MessageCreate, async (message) => {
       .addSeparatorComponents(new SeparatorBuilder())
       .addTextDisplayComponents(
         new TextDisplayBuilder().setContent(
-          '**Slash Commands**\n`/antinuke enable` — Enable protection\n`/antinuke disable` — Disable protection\n`/antinuke status` — Dashboard\n`/antinuke whitelist add @user` — Whitelist user\n`/antinuke whitelist remove @user` — Remove from whitelist\n`/antinuke owner add @user` — Add extra owner\n`/antinuke owner remove @user` — Remove extra owner\n`/antinuke lockdown` — Activate lockdown\n`/antinuke unlock` — Deactivate lockdown'
+          '**Slash Commands**\n`/antinuke` — Anti-nuke management\n`/antinuke whitelist` — Whitelist users\n`/antinuke owner` — Extra owners\n`/antinuke lockdown` — Lockdown mode\n\n**Prefix Commands**\n`&help` — Show this\n`&ping` — Check latency'
         )
       )
       .addSeparatorComponents(new SeparatorBuilder())
       .addTextDisplayComponents(
-        new TextDisplayBuilder().setContent('**Prefix Commands**\n`&help` — Show this\n`&ping` — Check latency')
+        new TextDisplayBuilder().setContent('**Quick Actions**\nClick a button below to run a command instantly')
       )
       .addSeparatorComponents(new SeparatorBuilder())
       .addTextDisplayComponents(
         new TextDisplayBuilder().setContent('[Zynrax Development](https://discord.gg/zynrax)')
       );
 
-    return message.reply({ components: [container], flags: 32768 });
+    const row1 = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId('help_enable').setLabel('Enable').setEmoji('\u2705').setStyle(ButtonStyle.Success),
+      new ButtonBuilder().setCustomId('help_disable').setLabel('Disable').setEmoji('\u274C').setStyle(ButtonStyle.Danger),
+      new ButtonBuilder().setCustomId('antinuke_status').setLabel('Status').setEmoji('\uD83D\uDD0D').setStyle(ButtonStyle.Primary)
+    );
+    const row2 = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId('help_lockdown').setLabel('Lockdown').setEmoji('\uD83D\uDD12').setStyle(ButtonStyle.Danger),
+      new ButtonBuilder().setCustomId('help_unlock').setLabel('Unlock').setEmoji('\uD83D\uDD13').setStyle(ButtonStyle.Success),
+      new ButtonBuilder().setCustomId('help_ping').setLabel('Ping').setEmoji('\uD83C\uDFD3').setStyle(ButtonStyle.Secondary)
+    );
+
+    return message.reply({ components: [container, row1, row2], flags: 32768 });
   }
 
   if (command === 'ping') {
