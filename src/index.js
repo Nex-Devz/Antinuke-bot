@@ -9,7 +9,15 @@ import {
   REST,
   Routes,
   SlashCommandBuilder,
-  PermissionFlagsBits
+  PermissionFlagsBits,
+  ContainerBuilder,
+  TextDisplayBuilder,
+  SeparatorBuilder,
+  SectionBuilder,
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  ComponentType
 } from 'discord.js';
 
 import Database from './database/Database.js';
@@ -129,13 +137,21 @@ client.on(Events.MessageCreate, async (message) => {
   if (message.author.bot) return;
 
   if (message.mentions.has(client.user)) {
-    const embed = {
-      title: 'AntiN8',
-      description: '**Commands**\n`/antinuke enable` — Enable protection\n`/antinuke disable` — Disable protection\n`/antinuke status` — Show dashboard\n`/antinuke whitelist add @user` — Whitelist user\n`/antinuke whitelist remove @user` — Remove from whitelist\n`/antinuke owner add @user` — Add extra owner\n`/antinuke owner remove @user` — Remove extra owner\n`/antinuke lockdown` — Activate lockdown\n`/antinuke unlock` — Deactivate lockdown\n\n**Prefix**\n`&help` — Show commands\n`&ping` — Check latency\n\n**Support**\n[discord.gg/zynrax](https://discord.gg/zynrax)',
-      color: 0x5865F2,
-      footer: { text: 'Zynrax Development' }
-    };
-    return message.reply({ embeds: [embed] });
+    const container = new ContainerBuilder()
+      .addTextDisplayComponents(
+        new TextDisplayBuilder().setContent('# AntiN8\nAnti-nuke security bot by Zynrax Development')
+      )
+      .addSeparatorComponents(
+        new SeparatorBuilder()
+      )
+      .addTextDisplayComponents(
+        new TextDisplayBuilder().setContent('**Support**\n[discord.gg/zynrax](https://discord.gg/zynrax)')
+      );
+
+    return message.reply({
+      components: [container],
+      flags: 32768
+    });
   }
 
   if (!message.content.startsWith(PREFIX)) return;
