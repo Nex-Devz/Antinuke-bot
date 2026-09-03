@@ -1,0 +1,18 @@
+{
+  "name": "antin8",
+  "version": "1.0.0",
+  "description": "AntiN8 — Discord Anti-Nuke & Anti-Abuse Security Bot",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "author": "Zynrax Development",
+  "license": "MIT",
+  "dependencies": {
+    "discord.js": "^14.18.0",
+    "better-sqlite3": "^11.7.0",
+    "dotenv": "^16.4.7"
+  }
+}
