@@ -1,0 +1,10 @@
+services:
+  antin8:
+    build: .
+    container_name: antin8
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ./data:/app/data
+    environment:
+      - NODE_ENV=production
