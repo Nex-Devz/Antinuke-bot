@@ -1,6 +1,6 @@
-import { Container, TextDisplay, Separator, Section, Button, ActionRow } from 'discord.js';
+import { ContainerBuilder, TextDisplayBuilder, SeparatorBuilder, SectionBuilder, ThumbnailBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 
-export function buildOverviewDashboard(guildState) {
+export function buildOverviewDashboard(guildState, client) {
   const modules = [
     { name: 'Anti Ban', enabled: guildState?.modules?.antiBan ?? false },
     { name: 'Anti Kick', enabled: guildState?.modules?.antiKick ?? false },
@@ -17,48 +17,53 @@ export function buildOverviewDashboard(guildState) {
   const protectedChannels = guildState?.protectedChannels ?? 0;
   const protectedWebhooks = guildState?.protectedWebhooks ?? 0;
 
-  const components = [
-    new TextDisplay({
-      content: '# Luna Security',
-    }),
-    new TextDisplay({
-      content: 'Server protection is active.',
-    }),
-    new Separator({ spacing: 2 }),
-    new Section({
-      text: `**Protection**\n${modules.map((m) => `${m.name}: ${m.enabled ? 'Enabled' : 'Disabled'}`).join('\n')}`,
-    }),
-    new Separator({ spacing: 2 }),
-    new Section({
-      text: `**Threat Level**\n${threatLevel}`,
-    }),
-    new Separator({ spacing: 2 }),
-    new Section({
-      text: `**Protected Resources**\nRoles: ${protectedRoles}\nChannels: ${protectedChannels}\nWebhooks: ${protectedWebhooks}`,
-    }),
-    new Separator({ spacing: 2 }),
-    new ActionRow({
-      components: [
-        new Button({
-          custom_id: 'config_open',
-          label: 'Configure',
-          style: 1,
-        }),
-        new Button({
-          custom_id: 'whitelist_open',
-          label: 'Whitelist',
-          style: 2,
-        }),
-        new Button({
-          custom_id: 'logs_open',
-          label: 'Logs',
-          style: 2,
-        }),
-      ],
-    }),
-  ];
+  const container = new ContainerBuilder();
 
-  return new Container({
-    components,
-  });
+  const avatarUrl = client?.user?.displayAvatarURL({ size: 256 });
+  if (avatarUrl) {
+    try {
+      const section = new SectionBuilder()
+        .addTextDisplayComponents(
+          new TextDisplayBuilder().setContent('# Luna Security\nServer protection dashboard')
+        )
+        .setThumbnailAccessory(
+          new ThumbnailBuilder().setURL(avatarUrl)
+        );
+      container.addSectionComponents(section);
+    } catch {
+      container.addTextDisplayComponents(
+        new TextDisplayBuilder().setContent('# Luna Security\nServer protection dashboard')
+      );
+    }
+  } else {
+    container.addTextDisplayComponents(
+      new TextDisplayBuilder().setContent('# Luna Security\nServer protection dashboard')
+    );
+  }
+
+  container
+    .addSeparatorComponents(new SeparatorBuilder())
+    .addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(
+        '**Modules**\n' + modules.map(m => `${m.enabled ? '\u2705' : '\u274C'} ${m.name}`).join('\n')
+      )
+    )
+    .addSeparatorComponents(new SeparatorBuilder())
+    .addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(
+        `**Threat Level:** ${threatLevel}\n**Protected Roles:** ${protectedRoles} | **Channels:** ${protectedChannels} | **Webhooks:** ${protectedWebhooks}`
+      )
+    )
+    .addSeparatorComponents(new SeparatorBuilder())
+    .addTextDisplayComponents(
+      new TextDisplayBuilder().setContent('[Zynrax Development](https://discord.gg/zynrax)')
+    );
+
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId('config_open').setLabel('Configure').setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId('whitelist_open').setLabel('Whitelist').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('logs_open').setLabel('Logs').setStyle(ButtonStyle.Secondary)
+  );
+
+  return { container, row };
 }

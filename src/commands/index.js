@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, ApplicationCommandOptionType, PermissionFlagsBits, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
+import { SlashCommandBuilder, PermissionFlagsBits, ActionRowBuilder, ButtonBuilder, ButtonStyle, ContainerBuilder, TextDisplayBuilder, SeparatorBuilder, SectionBuilder, ThumbnailBuilder } from 'discord.js';
 
 const antinukeCommand = new SlashCommandBuilder()
   .setName('antinuke')
@@ -46,27 +46,55 @@ const antinukeCommand = new SlashCommandBuilder()
 
 const commandDefinitions = [antinukeCommand.toJSON()];
 
-function buildStatusEmbed(config, state, enabled) {
+function buildStatusContainer(config, state, enabled) {
+  const client = state?.client;
+  const avatarUrl = client?.user?.displayAvatarURL({ size: 256 }) || '';
+
   const modules = config?.modules || {};
   const moduleList = Object.entries(modules)
-    .map(([k, v]) => `${k}: ${v ? 'ON' : 'OFF'}`)
+    .map(([k, v]) => `${v ? '\u2705' : '\u274C'} ${k}`)
     .join('\n') || 'No modules configured';
 
-  return {
-    title: 'Luna Security Status',
-    description: enabled ? 'Protection is **ACTIVE**' : 'Protection is **DISABLED**',
-    color: enabled ? 0x3BA55C : 0xED4245,
-    fields: [
-      { name: 'Modules', value: `\`\`\`\n${moduleList}\n\`\`\``, inline: false },
-      { name: 'Protected Roles', value: String(state.protectedRoles.size), inline: true },
-      { name: 'Protected Channels', value: String(state.protectedChannels.size), inline: true },
-      { name: 'Whitelisted', value: String(state.whitelist.size), inline: true },
-      { name: 'Extra Owners', value: String(state.extraOwners.size), inline: true },
-      { name: 'Lockdown', value: config?.lockdown ? 'Active' : 'Inactive', inline: true }
-    ],
-    footer: { text: 'Zynrax Development' },
-    timestamp: new Date().toISOString()
-  };
+  const container = new ContainerBuilder();
+
+  if (avatarUrl) {
+    try {
+      const section = new SectionBuilder()
+        .addTextDisplayComponents(
+          new TextDisplayBuilder().setContent(`# Luna Security\nProtection is ${enabled ? '**ACTIVE**' : '**DISABLED**'}`)
+        )
+        .setThumbnailAccessory(
+          new ThumbnailBuilder().setURL(avatarUrl)
+        );
+      container.addSectionComponents(section);
+    } catch {
+      container.addTextDisplayComponents(
+        new TextDisplayBuilder().setContent(`# Luna Security\nProtection is ${enabled ? '**ACTIVE**' : '**DISABLED**'}`)
+      );
+    }
+  } else {
+    container.addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(`# Luna Security\nProtection is ${enabled ? '**ACTIVE**' : '**DISABLED**'}`)
+    );
+  }
+
+  container
+    .addSeparatorComponents(new SeparatorBuilder())
+    .addTextDisplayComponents(
+      new TextDisplayBuilder().setContent('**Modules**\n' + moduleList)
+    )
+    .addSeparatorComponents(new SeparatorBuilder())
+    .addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(
+        `**Protected Roles:** ${state.protectedRoles.size} | **Protected Channels:** ${state.protectedChannels.size}\n**Whitelisted:** ${state.whitelist.size} | **Extra Owners:** ${state.extraOwners.size}\n**Lockdown:** ${config?.lockdown ? 'Active' : 'Inactive'}`
+      )
+    )
+    .addSeparatorComponents(new SeparatorBuilder())
+    .addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(`**Last Scan:** <t:${Math.floor(Date.now() / 1000)}:R>\n[Zynrax Development](https://discord.gg/zynrax)`)
+    );
+
+  return container;
 }
 
 function buildButtons(enabled) {
@@ -116,7 +144,15 @@ async function handleCommand(interaction, context) {
       database.upsertSecurityConfig(guildId, config, new Date().toISOString());
       const state = cache.get(guildId);
       state.config = config;
-      return interaction.reply({ content: 'Anti-nuke protection enabled.', ephemeral: true });
+      const container = new ContainerBuilder()
+        .addTextDisplayComponents(
+          new TextDisplayBuilder().setContent('# Luna\nProtection **enabled** successfully.')
+        )
+        .addSeparatorComponents(new SeparatorBuilder())
+        .addTextDisplayComponents(
+          new TextDisplayBuilder().setContent('[Zynrax Development](https://discord.gg/zynrax)')
+        );
+      return interaction.reply({ components: [container], flags: 32768, ephemeral: true });
     }
 
     if (subcommand === 'disable') {
@@ -128,7 +164,15 @@ async function handleCommand(interaction, context) {
       if (config) database.upsertSecurityConfig(guildId, config, new Date().toISOString());
       const state = cache.get(guildId);
       state.config = config;
-      return interaction.reply({ content: 'Anti-nuke protection disabled.', ephemeral: true });
+      const container = new ContainerBuilder()
+        .addTextDisplayComponents(
+          new TextDisplayBuilder().setContent('# Luna\nProtection **disabled** successfully.')
+        )
+        .addSeparatorComponents(new SeparatorBuilder())
+        .addTextDisplayComponents(
+          new TextDisplayBuilder().setContent('[Zynrax Development](https://discord.gg/zynrax)')
+        );
+      return interaction.reply({ components: [container], flags: 32768, ephemeral: true });
     }
 
     if (subcommand === 'status') {
@@ -137,10 +181,11 @@ async function handleCommand(interaction, context) {
       }
       const config = database.getGuildConfig(guildId);
       const state = cache.get(guildId);
+      state.client = interaction.client;
       const enabled = config?.modules && Object.values(config.modules).some(v => v);
-      const embed = buildStatusEmbed(config, state, enabled);
+      const container = buildStatusContainer(config, state, enabled);
       const buttons = buildButtons(enabled);
-      return interaction.reply({ embeds: [embed], components: [buttons], ephemeral: true });
+      return interaction.reply({ components: [container, buttons], flags: 32768, ephemeral: true });
     }
 
     if (subcommand === 'whitelist') {
@@ -150,14 +195,36 @@ async function handleCommand(interaction, context) {
       const action = interaction.options.getString('action', true);
       const userInput = interaction.options.getString('user', true);
       const userId = extractUserId(userInput, interaction.client);
-      if (!userId) return interaction.reply({ content: 'Invalid user. Provide a user ID or @mention.', ephemeral: true });
+      if (!userId) {
+        const container = new ContainerBuilder()
+          .addTextDisplayComponents(
+            new TextDisplayBuilder().setContent('# Luna\nInvalid user. Provide a user ID or @mention.')
+          );
+        return interaction.reply({ components: [container], flags: 32768, ephemeral: true });
+      }
 
       if (action === 'add') {
         await whitelistManager.add(guildId, userId, 'user', ['ALL'], interaction.user.id);
-        return interaction.reply({ content: `<@${userId}> added to whitelist.`, ephemeral: true });
+        const container = new ContainerBuilder()
+          .addTextDisplayComponents(
+            new TextDisplayBuilder().setContent(`# Luna\n<@${userId}> added to **whitelist**.`)
+          )
+          .addSeparatorComponents(new SeparatorBuilder())
+          .addTextDisplayComponents(
+            new TextDisplayBuilder().setContent('[Zynrax Development](https://discord.gg/zynrax)')
+          );
+        return interaction.reply({ components: [container], flags: 32768, ephemeral: true });
       } else {
         await whitelistManager.remove(guildId, userId);
-        return interaction.reply({ content: `<@${userId}> removed from whitelist.`, ephemeral: true });
+        const container = new ContainerBuilder()
+          .addTextDisplayComponents(
+            new TextDisplayBuilder().setContent(`# Luna\n<@${userId}> removed from **whitelist**.`)
+          )
+          .addSeparatorComponents(new SeparatorBuilder())
+          .addTextDisplayComponents(
+            new TextDisplayBuilder().setContent('[Zynrax Development](https://discord.gg/zynrax)')
+          );
+        return interaction.reply({ components: [container], flags: 32768, ephemeral: true });
       }
     }
 
@@ -168,14 +235,36 @@ async function handleCommand(interaction, context) {
       const action = interaction.options.getString('action', true);
       const userInput = interaction.options.getString('user', true);
       const userId = extractUserId(userInput, interaction.client);
-      if (!userId) return interaction.reply({ content: 'Invalid user. Provide a user ID or @mention.', ephemeral: true });
+      if (!userId) {
+        const container = new ContainerBuilder()
+          .addTextDisplayComponents(
+            new TextDisplayBuilder().setContent('# Luna\nInvalid user. Provide a user ID or @mention.')
+          );
+        return interaction.reply({ components: [container], flags: 32768, ephemeral: true });
+      }
 
       if (action === 'add') {
         await ownerManager.add(guildId, userId, interaction.user.id);
-        return interaction.reply({ content: `<@${userId}> added as extra owner.`, ephemeral: true });
+        const container = new ContainerBuilder()
+          .addTextDisplayComponents(
+            new TextDisplayBuilder().setContent(`# Luna\n<@${userId}> added as **extra owner**.`)
+          )
+          .addSeparatorComponents(new SeparatorBuilder())
+          .addTextDisplayComponents(
+            new TextDisplayBuilder().setContent('[Zynrax Development](https://discord.gg/zynrax)')
+          );
+        return interaction.reply({ components: [container], flags: 32768, ephemeral: true });
       } else {
         await ownerManager.remove(guildId, userId);
-        return interaction.reply({ content: `<@${userId}> removed from extra owners.`, ephemeral: true });
+        const container = new ContainerBuilder()
+          .addTextDisplayComponents(
+            new TextDisplayBuilder().setContent(`# Luna\n<@${userId}> removed from **extra owners**.`)
+          )
+          .addSeparatorComponents(new SeparatorBuilder())
+          .addTextDisplayComponents(
+            new TextDisplayBuilder().setContent('[Zynrax Development](https://discord.gg/zynrax)')
+          );
+        return interaction.reply({ components: [container], flags: 32768, ephemeral: true });
       }
     }
 
@@ -186,7 +275,19 @@ async function handleCommand(interaction, context) {
       database.setLockdown(guildId, true);
       const state = cache.get(guildId);
       if (state.config) state.config.lockdown = true;
-      return interaction.reply({ content: 'Lockdown mode activated.', ephemeral: true });
+      const container = new ContainerBuilder()
+        .addTextDisplayComponents(
+          new TextDisplayBuilder().setContent('# Luna\nLockdown **activated**.')
+        )
+        .addSeparatorComponents(new SeparatorBuilder())
+        .addTextDisplayComponents(
+          new TextDisplayBuilder().setContent('All modules have been disabled and server is on high alert.')
+        )
+        .addSeparatorComponents(new SeparatorBuilder())
+        .addTextDisplayComponents(
+          new TextDisplayBuilder().setContent('[Zynrax Development](https://discord.gg/zynrax)')
+        );
+      return interaction.reply({ components: [container], flags: 32768, ephemeral: true });
     }
 
     if (subcommand === 'unlock') {
@@ -196,15 +297,31 @@ async function handleCommand(interaction, context) {
       database.setLockdown(guildId, false);
       const state = cache.get(guildId);
       if (state.config) state.config.lockdown = false;
-      return interaction.reply({ content: 'Lockdown mode deactivated.', ephemeral: true });
+      const container = new ContainerBuilder()
+        .addTextDisplayComponents(
+          new TextDisplayBuilder().setContent('# Luna\nLockdown **deactivated**.')
+        )
+        .addSeparatorComponents(new SeparatorBuilder())
+        .addTextDisplayComponents(
+          new TextDisplayBuilder().setContent('Protection is back to normal operation.')
+        )
+        .addSeparatorComponents(new SeparatorBuilder())
+        .addTextDisplayComponents(
+          new TextDisplayBuilder().setContent('[Zynrax Development](https://discord.gg/zynrax)')
+        );
+      return interaction.reply({ components: [container], flags: 32768, ephemeral: true });
     }
 
     return false;
   } catch (error) {
     console.error('[Luna] Command error:', error);
-    if (interaction.replied || interaction.deferred) return interaction.followUp({ content: 'An error occurred.', ephemeral: true });
-    return interaction.reply({ content: 'An error occurred.', ephemeral: true });
+    const container = new ContainerBuilder()
+      .addTextDisplayComponents(
+        new TextDisplayBuilder().setContent('# Luna\nAn error occurred.')
+      );
+    if (interaction.replied || interaction.deferred) return interaction.followUp({ components: [container], flags: 32768, ephemeral: true });
+    return interaction.reply({ components: [container], flags: 32768, ephemeral: true });
   }
 }
 
-export { commandDefinitions, handleCommand, buildStatusEmbed, buildButtons };
+export { commandDefinitions, handleCommand, buildStatusContainer, buildButtons };

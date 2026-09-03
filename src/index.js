@@ -31,7 +31,7 @@ import { WhitelistManager } from './security/WhitelistManager.js';
 import { OwnerManager } from './security/OwnerManager.js';
 
 import { registerEvents } from './events/index.js';
-import { commandDefinitions, handleCommand, buildStatusEmbed, buildButtons } from './commands/index.js';
+import { commandDefinitions, handleCommand, buildStatusContainer, buildButtons } from './commands/index.js';
 import { onReady } from './events/ready.js';
 
 console.log('[Luna] Starting up...');
@@ -102,9 +102,11 @@ client.on(Events.InteractionCreate, async (interaction) => {
         Object.keys(config.modules).forEach(k => config.modules[k] = true);
         database.upsertSecurityConfig(guildId, config, new Date().toISOString());
         cache.get(guildId).config = config;
-        const embed = buildStatusEmbed(config, cache.get(guildId), true);
+        const state = cache.get(guildId);
+        state.client = interaction.client;
+        const container = buildStatusContainer(config, state, true);
         const buttons = buildButtons(true);
-        return interaction.update({ embeds: [embed], components: [buttons] });
+        return interaction.update({ components: [container, buttons], flags: 32768 });
       }
 
       if (interaction.customId === 'antinuke_disable') {
@@ -115,22 +117,33 @@ client.on(Events.InteractionCreate, async (interaction) => {
         if (config?.modules) Object.keys(config.modules).forEach(k => config.modules[k] = false);
         if (config) database.upsertSecurityConfig(guildId, config, new Date().toISOString());
         cache.get(guildId).config = config;
-        const embed = buildStatusEmbed(config, cache.get(guildId), false);
+        const state = cache.get(guildId);
+        state.client = interaction.client;
+        const container = buildStatusContainer(config, state, false);
         const buttons = buildButtons(false);
-        return interaction.update({ embeds: [embed], components: [buttons] });
+        return interaction.update({ components: [container, buttons], flags: 32768 });
       }
 
       if (interaction.customId === 'antinuke_status') {
         const config = database.getGuildConfig(guildId);
         const state = cache.get(guildId);
+        state.client = interaction.client;
         const enabled = config?.modules && Object.values(config.modules).some(v => v);
-        const embed = buildStatusEmbed(config, state, enabled);
+        const container = buildStatusContainer(config, state, enabled);
         const buttons = buildButtons(enabled);
-        return interaction.update({ embeds: [embed], components: [buttons] });
+        return interaction.update({ components: [container, buttons], flags: 32768 });
       }
     }
   } catch (error) {
     console.error('[Luna] Error:', error);
+    const container = new ContainerBuilder()
+      .addTextDisplayComponents(
+        new TextDisplayBuilder().setContent('# Luna\nAn error occurred.')
+      );
+    if (interaction.replied || interaction.deferred) {
+      return interaction.followUp({ components: [container], flags: 32768, ephemeral: true }).catch(() => {});
+    }
+    return interaction.reply({ components: [container], flags: 32768, ephemeral: true }).catch(() => {});
   }
 });
 
@@ -181,19 +194,56 @@ client.on(Events.MessageCreate, async (message) => {
   const command = args.shift().toLowerCase();
 
   if (command === 'help') {
-    const embed = {
-      title: 'Luna Commands',
-      description: '`/antinuke enable` — Enable protection\n`/antinuke disable` — Disable protection\n`/antinuke status` — Show dashboard\n`/antinuke whitelist add @user` — Whitelist user\n`/antinuke whitelist remove @user` — Remove from whitelist\n`/antinuke owner add @user` — Add extra owner\n`/antinuke owner remove @user` — Remove extra owner\n`/antinuke lockdown` — Activate lockdown\n`/antinuke unlock` — Deactivate lockdown\n`&ping` — Check latency',
-      color: 0x5865F2,
-      footer: { text: 'Zynrax Development' }
-    };
-    return message.reply({ embeds: [embed] });
+    const avatarUrl = client.user.displayAvatarURL({ size: 256 });
+    const container = new ContainerBuilder();
+
+    const section = new SectionBuilder()
+      .addTextDisplayComponents(
+        new TextDisplayBuilder().setContent('# Luna Commands\nYour cute anime security guardian')
+      )
+      .setThumbnailAccessory(
+        new ThumbnailBuilder().setURL(avatarUrl)
+      );
+    container.addSectionComponents(section);
+
+    container
+      .addSeparatorComponents(new SeparatorBuilder())
+      .addTextDisplayComponents(
+        new TextDisplayBuilder().setContent(
+          '**Slash Commands**\n`/antinuke enable` — Enable protection\n`/antinuke disable` — Disable protection\n`/antinuke status` — Dashboard\n`/antinuke whitelist add @user` — Whitelist user\n`/antinuke whitelist remove @user` — Remove from whitelist\n`/antinuke owner add @user` — Add extra owner\n`/antinuke owner remove @user` — Remove extra owner\n`/antinuke lockdown` — Activate lockdown\n`/antinuke unlock` — Deactivate lockdown'
+        )
+      )
+      .addSeparatorComponents(new SeparatorBuilder())
+      .addTextDisplayComponents(
+        new TextDisplayBuilder().setContent('**Prefix Commands**\n`&help` — Show this\n`&ping` — Check latency')
+      )
+      .addSeparatorComponents(new SeparatorBuilder())
+      .addTextDisplayComponents(
+        new TextDisplayBuilder().setContent('[Zynrax Development](https://discord.gg/zynrax)')
+      );
+
+    return message.reply({ components: [container], flags: 32768 });
   }
 
   if (command === 'ping') {
-    const sent = await message.reply('Pinging...');
+    const sent = await message.reply({ content: 'Pinging...' });
     const latency = sent.createdTimestamp - message.createdTimestamp;
-    return sent.edit(`Pong! Latency: **${latency}ms** | API: **${Math.round(client.ws.ping)}ms**`);
+    const apiLatency = Math.round(client.ws.ping);
+
+    const container = new ContainerBuilder()
+      .addTextDisplayComponents(
+        new TextDisplayBuilder().setContent('# Pong!')
+      )
+      .addSeparatorComponents(new SeparatorBuilder())
+      .addTextDisplayComponents(
+        new TextDisplayBuilder().setContent(`**Latency:** ${latency}ms\n**API:** ${apiLatency}ms`)
+      )
+      .addSeparatorComponents(new SeparatorBuilder())
+      .addTextDisplayComponents(
+        new TextDisplayBuilder().setContent('[Zynrax Development](https://discord.gg/zynrax)')
+      );
+
+    return sent.edit({ content: '', components: [container], flags: 32768 });
   }
 });
 
