@@ -156,7 +156,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
 client.on(Events.MessageCreate, async (message) => {
   if (message.author.bot) return;
 
-  if (message.mentions.has(client.user)) {
+  const mentionRegex = new RegExp(`^<@!?$\\{client.user.id}>\\s*$`);
+  if (mentionRegex.test(message.content.trim())) {
     const avatarUrl = client.user.displayAvatarURL({ size: 256 });
     const container = new ContainerBuilder();
 
@@ -246,6 +247,22 @@ client.on(Events.MessageCreate, async (message) => {
       );
 
     return sent.edit({ content: '', components: [container], flags: 32768 });
+  }
+
+  if (command === 'antinuke') {
+    if (!message.member.permissions.has(PermissionFlagsBits.Administrator)) {
+      return message.reply('Administrator permission required.');
+    }
+    const { database, cache } = context;
+    const guildId = message.guild.id;
+    let config = database.getGuildConfig(guildId);
+    if (!config) await database.initGuildConfig(guildId);
+    config = database.getGuildConfig(guildId);
+    const state = cache.get(guildId);
+    state.client = client;
+    const enabled = config && Object.values(config).some(v => typeof v === 'object' && v !== null && v.enabled === true);
+    const container = buildStatusContainer(config, state, enabled);
+    return message.reply({ components: [container], flags: 32768 });
   }
 });
 
