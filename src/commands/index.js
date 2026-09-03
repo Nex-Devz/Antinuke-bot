@@ -82,15 +82,12 @@ function buildStatusContainer(config, state, enabled) {
   const client = state?.client;
   const avatarUrl = client?.user?.displayAvatarURL({ size: 256 }) || '';
 
-  const tick = getEmoji('floovi_tick');
-  const cross = getEmoji('floovi_cross');
   const moduleList = Object.entries(config || {})
     .filter(([k, v]) => typeof v === 'object' && v !== null && 'enabled' in v)
-    .map(([k, v]) => `${v.enabled ? (tick || '\u2705') : (cross || '\u274C')} **${formatModuleName(k)}**`)
-    .join('\n') || 'No modules configured';
+    .map(([k, v]) => `> ${v.enabled ? '\u2022' : '\u2022'} **${formatModuleName(k)}** — ${v.enabled ? 'ON' : 'OFF'}`)
+    .join('\n') || '> No modules configured';
 
-  const hasResources = state.protectedRoles.size > 0 || state.protectedChannels.size > 0;
-  const isFullyActive = enabled && hasResources;
+  const status = enabled ? '**ACTIVE**' : '**DISABLED**';
 
   const container = new ContainerBuilder();
 
@@ -98,7 +95,7 @@ function buildStatusContainer(config, state, enabled) {
     try {
       const section = new SectionBuilder()
         .addTextDisplayComponents(
-          new TextDisplayBuilder().setContent(`# Luna Security\nProtection is ${isFullyActive ? '**ACTIVE**' : enabled ? '**PARTIAL**' : '**DISABLED**'}`)
+          new TextDisplayBuilder().setContent(`# Luna Security\nProtection is ${status}`)
         )
         .setThumbnailAccessory(
           new ThumbnailBuilder().setURL(avatarUrl)
@@ -106,19 +103,12 @@ function buildStatusContainer(config, state, enabled) {
       container.addSectionComponents(section);
     } catch {
       container.addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(`# Luna Security\nProtection is ${isFullyActive ? '**ACTIVE**' : enabled ? '**PARTIAL**' : '**DISABLED**'}`)
+        new TextDisplayBuilder().setContent(`# Luna Security\nProtection is ${status}`)
       );
     }
   } else {
     container.addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(`# Luna Security\nProtection is ${isFullyActive ? '**ACTIVE**' : enabled ? '**PARTIAL**' : '**DISABLED**'}`)
-    );
-  }
-
-  if (enabled && !hasResources) {
-    container.addSeparatorComponents(new SeparatorBuilder());
-    container.addTextDisplayComponents(
-      new TextDisplayBuilder().setContent('> Modules are enabled but no roles or channels are protected yet. Use `/antinuke` panel or add protected resources.')
+      new TextDisplayBuilder().setContent(`# Luna Security\nProtection is ${status}`)
     );
   }
 
@@ -129,13 +119,11 @@ function buildStatusContainer(config, state, enabled) {
     )
     .addSeparatorComponents(new SeparatorBuilder())
     .addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(
-        `**Roles:** ${state.protectedRoles.size} | **Channels:** ${state.protectedChannels.size} | **Webhooks:** ${state.protectedWebhooks.size}\n**Whitelisted:** ${state.whitelist.size} | **Owners:** ${state.extraOwners.size}\n**Lockdown:** ${config?.lockdown ? 'Active' : 'Inactive'}`
-      )
+      new TextDisplayBuilder().setContent(`**Whitelisted:** ${state.whitelist.size} | **Owners:** ${state.extraOwners.size}`)
     )
     .addSeparatorComponents(new SeparatorBuilder())
     .addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(`**Last Scan:** <t:${Math.floor(Date.now() / 1000)}:R>`)
+      new TextDisplayBuilder().setContent('[Zynrax Development](https://discord.gg/zynrax)')
     );
 
   const row = new ActionRowBuilder().addComponents(

@@ -18,7 +18,8 @@ import {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
-  ComponentType
+  ComponentType,
+  StringSelectMenuBuilder
 } from 'discord.js';
 
 import Database from './database/Database.js';
@@ -117,6 +118,26 @@ client.on(Events.InteractionCreate, async (interaction) => {
           }
         });
         database.upsertSecurityConfig(guildId, config, new Date().toISOString());
+
+        const guild = interaction.guild;
+        const now = new Date().toISOString();
+        if (guild) {
+          guild.roles.cache.forEach(role => {
+            if (role.id !== guild.id) {
+              database.setProtectedRoles(guildId, role.id, interaction.user.id, now);
+              cache.get(guildId).protectedRoles.add(role.id);
+            }
+          });
+          guild.channels.cache.forEach(channel => {
+            database.setProtectedChannels(guildId, channel.id, interaction.user.id, now);
+            cache.get(guildId).protectedChannels.add(channel.id);
+          });
+          guild.invites.cache.forEach(invite => {
+            database.setProtectedWebhooks(guildId, invite.code, invite.url || '', interaction.user.id, now);
+            cache.get(guildId).protectedWebhooks.add(invite.code);
+          });
+        }
+
         cache.get(guildId).config = config;
         const state = cache.get(guildId);
         state.client = interaction.client;
@@ -165,6 +186,30 @@ client.on(Events.InteractionCreate, async (interaction) => {
         const container = buildStatusContainer(config, state, enabled);
         return interaction.update({ components: [container], flags: 32768 });
       }
+    }
+
+    if (interaction.isStringSelectMenu() && interaction.customId === 'help_select') {
+      const value = interaction.values[0];
+
+      const descriptions = {
+        antinuke: '**/antinuke** — Opens the security panel\n\nShows all protection modules with Enable/Disable buttons. Click Enable All to activate protection for your server.',
+        whitelist: '**/whitelist add @user** — Add user to whitelist\n**/whitelist remove @user** — Remove from whitelist\n**/whitelist list** — Show all whitelisted users\n\nWhitelisted users are immune to all protection actions.',
+        coowner: '**/coowner add @user** — Add extra owner\n**/coowner remove @user** — Remove extra owner\n**/coowner list** — Show all extra owners\n\nExtra owners have same permissions as the server owner.',
+        lockdown: '**/lockdown** — Activate lockdown mode\n\nDisables all modules and puts server on high alert. Only admins can manage.',
+        unlock: '**/unlock** — Deactivate lockdown\n\nReturns protection to normal operation.',
+        ping: '**&ping** — Check bot latency\n\nShows message latency and API response time.'
+      };
+
+      const container = new ContainerBuilder()
+        .addTextDisplayComponents(
+          new TextDisplayBuilder().setContent(`# Luna\n${descriptions[value] || 'Unknown command'}`)
+        )
+        .addSeparatorComponents(new SeparatorBuilder())
+        .addTextDisplayComponents(
+          new TextDisplayBuilder().setContent('[Zynrax Development](https://discord.gg/zynrax)')
+        );
+
+      return interaction.reply({ components: [container], flags: 32768, ephemeral: true });
     }
   } catch (error) {
     console.error('[Luna] Error:', error);
@@ -242,16 +287,28 @@ client.on(Events.MessageCreate, async (message) => {
     container
       .addSeparatorComponents(new SeparatorBuilder())
       .addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(
-          '**Slash Commands**\n`/antinuke` — Security panel\n`/whitelist add/remove/list` — Whitelist users\n`/coowner add/remove/list` — Extra owners\n`/lockdown` — Activate lockdown\n`/unlock` — Deactivate lockdown\n\n**Prefix Commands**\n`&help` — Show this\n`&ping` — Check latency'
-        )
+        new TextDisplayBuilder().setContent('Select a command from the dropdown below to see details')
       )
       .addSeparatorComponents(new SeparatorBuilder())
       .addTextDisplayComponents(
         new TextDisplayBuilder().setContent('[Zynrax Development](https://discord.gg/zynrax)')
       );
 
-    return message.reply({ components: [container], flags: 32768 });
+    const select = new StringSelectMenuBuilder()
+      .setCustomId('help_select')
+      .setPlaceholder('Select a command...')
+      .addOptions(
+        { label: '/antinuke', description: 'Open security panel', value: 'antinuke' },
+        { label: '/whitelist', description: 'Manage whitelisted users', value: 'whitelist' },
+        { label: '/coowner', description: 'Manage extra owners', value: 'coowner' },
+        { label: '/lockdown', description: 'Activate lockdown mode', value: 'lockdown' },
+        { label: '/unlock', description: 'Deactivate lockdown', value: 'unlock' },
+        { label: '&ping', description: 'Check bot latency', value: 'ping' }
+      );
+
+    const row = new ActionRowBuilder().addComponents(select);
+
+    return message.reply({ components: [container, row], flags: 32768 });
   }
 
   if (command === 'ping') {
