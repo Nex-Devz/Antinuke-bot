@@ -1,4 +1,5 @@
 import { SlashCommandBuilder, PermissionFlagsBits, ActionRowBuilder, ButtonBuilder, ButtonStyle, ContainerBuilder, TextDisplayBuilder, SeparatorBuilder, SectionBuilder, ThumbnailBuilder } from 'discord.js';
+import { getEmoji } from '../utils/emoji.js';
 
 const antinukeCommand = new SlashCommandBuilder()
   .setName('antinuke')
@@ -71,9 +72,11 @@ function buildStatusContainer(config, state, enabled) {
   const client = state?.client;
   const avatarUrl = client?.user?.displayAvatarURL({ size: 256 }) || '';
 
+  const tick = getEmoji('luna_tick');
+  const cross = getEmoji('luna_cross');
   const moduleList = Object.entries(config || {})
     .filter(([k, v]) => typeof v === 'object' && v !== null && 'enabled' in v)
-    .map(([k, v]) => `${v.enabled ? '\u2705' : '\u274C'} ${k}`)
+    .map(([k, v]) => `${v.enabled ? (tick || '\u2705') : (cross || '\u274C')} ${k}`)
     .join('\n') || 'No modules configured';
 
   const container = new ContainerBuilder();

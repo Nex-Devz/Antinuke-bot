@@ -1,7 +1,11 @@
+import { setupEmojis } from '../utils/emoji.js';
+
 export async function onReady(client, context) {
   console.log(`[Luna] Client ready as ${client.user.tag}`);
 
   client.user.setActivity('your server | /antinuke', { type: 3 });
+
+  await setupEmojis(client);
 
   const { cache, database, snapshotManager } = context;
 
