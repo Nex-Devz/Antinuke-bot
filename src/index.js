@@ -14,15 +14,15 @@ import {
 
 import Database from './database/Database.js';
 import GuildCache from './cache/GuildCache.js';
-import IncidentEngine from './security/IncidentEngine.js';
-import PunishmentEngine from './security/PunishmentEngine.js';
-import SnapshotManager from './security/SnapshotManager.js';
-import AuditCorrelator from './security/AuditCorrelator.js';
-import WhitelistManager from './security/WhitelistManager.js';
-import OwnerManager from './security/OwnerManager.js';
+import { IncidentEngine } from './security/IncidentEngine.js';
+import { PunishmentEngine } from './security/PunishmentEngine.js';
+import { SnapshotManager } from './security/SnapshotManager.js';
+import { AuditCorrelator } from './security/AuditCorrelator.js';
+import { WhitelistManager } from './security/WhitelistManager.js';
+import { OwnerManager } from './security/OwnerManager.js';
 
-import registerEvents from './events/index.js';
-import { commandDefinitions, handleCommand } from './commands/index.js';
+import { registerEvents } from './events/index.js';
+import { commandDefinitions, handleCommand, buildStatusEmbed, buildButtons } from './commands/index.js';
 import { onReady } from './events/ready.js';
 
 console.log('[AntiN8] Starting up...');
@@ -70,18 +70,72 @@ const context = {
 
 registerEvents(client, context);
 
-client.on(Events.InteractionCreate, async (interaction) => {
-  if (!interaction.isChatInputCommand()) return;
+const PREFIX = '!';
 
+client.on(Events.InteractionCreate, async (interaction) => {
   try {
-    await handleCommand(interaction, context);
-  } catch (error) {
-    console.error('[AntiN8] Error handling command:', error);
-    if (interaction.replied || interaction.deferred) {
-      await interaction.followUp({ content: 'An error occurred.', ephemeral: true });
-    } else {
-      await interaction.reply({ content: 'An error occurred.', ephemeral: true });
+    if (interaction.isChatInputCommand()) {
+      await handleCommand(interaction, context);
     }
+
+    if (interaction.isButton()) {
+      const { database, cache } = context;
+      const guildId = interaction.guildId;
+
+      if (interaction.customId === 'antinuke_enable') {
+        if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+          return interaction.reply({ content: 'Administrator permission required.', ephemeral: true });
+        }
+        let config = database.getGuildConfig(guildId);
+        if (!config) await database.initGuildConfig(guildId);
+        config = database.getGuildConfig(guildId);
+        if (!config.modules) config.modules = {};
+        Object.keys(config.modules).forEach(k => config.modules[k] = true);
+        database.upsertSecurityConfig(guildId, config, new Date().toISOString());
+        cache.get(guildId).config = config;
+        const embed = buildStatusEmbed(config, cache.get(guildId), true);
+        const buttons = buildButtons(true);
+        return interaction.update({ embeds: [embed], components: [buttons] });
+      }
+
+      if (interaction.customId === 'antinuke_disable') {
+        if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+          return interaction.reply({ content: 'Administrator permission required.', ephemeral: true });
+        }
+        const config = database.getGuildConfig(guildId);
+        if (config?.modules) Object.keys(config.modules).forEach(k => config.modules[k] = false);
+        if (config) database.upsertSecurityConfig(guildId, config, new Date().toISOString());
+        cache.get(guildId).config = config;
+        const embed = buildStatusEmbed(config, cache.get(guildId), false);
+        const buttons = buildButtons(false);
+        return interaction.update({ embeds: [embed], components: [buttons] });
+      }
+
+      if (interaction.customId === 'antinuke_status') {
+        const config = database.getGuildConfig(guildId);
+        const state = cache.get(guildId);
+        const enabled = config?.modules && Object.values(config.modules).some(v => v);
+        const embed = buildStatusEmbed(config, state, enabled);
+        const buttons = buildButtons(enabled);
+        return interaction.update({ embeds: [embed], components: [buttons] });
+      }
+    }
+  } catch (error) {
+    console.error('[AntiN8] Error:', error);
+  }
+});
+
+client.on(Events.MessageCreate, async (message) => {
+  if (message.author.bot) return;
+
+  if (message.mentions.has(client.user)) {
+    const embed = {
+      title: 'AntiN8',
+      description: '**Commands**\n`/antinuke enable` — Enable protection\n`/antinuke disable` — Disable protection\n`/antinuke status` — Show dashboard\n`/antinuke whitelist add @user` — Whitelist user\n`/antinuke whitelist remove @user` — Remove from whitelist\n`/antinuke owner add @user` — Add extra owner\n`/antinuke owner remove @user` — Remove extra owner\n`/antinuke lockdown` — Activate lockdown\n`/antinuke unlock` — Deactivate lockdown\n\n**Support**\n[discord.gg/zynrax](https://discord.gg/zynrax)',
+      color: 0x5865F2,
+      footer: { text: 'Zynrax Development' }
+    };
+    return message.reply({ embeds: [embed] });
   }
 });
 

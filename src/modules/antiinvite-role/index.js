@@ -1,4 +1,4 @@
-import { PermissionAnalyzer } from '../../utils/PermissionAnalyzer.js';
+import { getRoleRisk, getRiskLevel } from '../../security/PermissionAnalyzer.js';
 
 const RISK_LOW = 29;
 const RISK_MEDIUM = 69;
@@ -32,7 +32,7 @@ export async function handleInviteCreateRole(event, context) {
     const role = guild.roles.cache.get(roleId);
     if (!role) continue;
 
-    const riskScore = PermissionAnalyzer.calculateRoleRisk(role);
+    const riskScore = getRoleRisk([role]);
     if (riskScore > maxRisk) maxRisk = riskScore;
 
     if (riskScore >= RISK_LOW) {

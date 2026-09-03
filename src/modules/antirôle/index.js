@@ -1,4 +1,4 @@
-import { PermissionAnalyzer } from '../security/PermissionAnalyzer.js';
+import { getRoleRisk, isDangerousRole, isAdminRole, getRiskLevel } from '../../security/PermissionAnalyzer.js';
 
 export async function handleRoleCreate(event, context) {
   const { client, cache, database, incidentEngine, punishmentEngine, snapshotManager, auditCorrelator, whitelistManager, ownerManager } = context;
@@ -63,10 +63,10 @@ export async function handleRoleUpdate(event, context) {
 
   const oldPerms = event.old.role?.permissions?.serialize() || [];
   const newPerms = event.role.permissions?.serialize() || [];
-  const escalation = PermissionAnalyzer.detectEscalation(oldPerms, newPerms);
+  const escalation = getPermissionChanges(oldPerms, newPerms);
 
   if (escalation.dangerous) {
-    const risk = calculateRoleEscalationRisk(escalation);
+    const risk = getRoleRisk(event.role);
     if (risk >= 70) {
       const snapshot = await snapshotManager.getRoleSnapshot(event.guild.id, event.role.id);
       if (snapshot) {

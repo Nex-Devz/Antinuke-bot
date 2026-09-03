@@ -29,9 +29,7 @@ import {
 import { handleInviteCreateRole } from "../modules/antiinvite-role/index.js";
 import { handleWebhookUpdate } from "../modules/antiwebhook/index.js";
 import {
-  handleIntegrationCreate,
-  handleIntegrationUpdate,
-  handleIntegrationDelete
+  handleIntegrationUpdate
 } from "../modules/antiintegration/index.js";
 import {
   handleAutoModRuleCreate,
@@ -190,25 +188,9 @@ export function registerEvents(client, context) {
     }
   });
 
-  client.on("integrationCreate", async (integration) => {
-    try {
-      await handleIntegrationCreate(integration, context);
-    } catch (err) {
-      console.error("[Gateway]", err);
-    }
-  });
-
   client.on("integrationUpdate", async (integration) => {
     try {
       await handleIntegrationUpdate(integration, context);
-    } catch (err) {
-      console.error("[Gateway]", err);
-    }
-  });
-
-  client.on("integrationDelete", async (integration) => {
-    try {
-      await handleIntegrationDelete(integration, context);
     } catch (err) {
       console.error("[Gateway]", err);
     }
