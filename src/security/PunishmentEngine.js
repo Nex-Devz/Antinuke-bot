@@ -117,7 +117,7 @@ export class PunishmentEngine {
         return { success: true, error: null };
       }
 
-      await member.roles.remove(removableRoles, 'Elu: Role strip');
+      await member.roles.remove(removableRoles, 'Luna: Role strip');
       console.log(`[Security] Stripped ${removableRoles.size} roles from ${member.user?.tag || member.id}`);
       return { success: true, error: null };
     } catch (err) {
@@ -147,7 +147,7 @@ export class PunishmentEngine {
         return { success: true, error: null };
       }
 
-      await member.roles.remove(rolesToRemove, 'Elu: Dangerous role removal');
+      await member.roles.remove(rolesToRemove, 'Luna: Dangerous role removal');
       console.log(`[Security] Removed ${rolesToRemove.size} dangerous roles from ${member.user?.tag || member.id}`);
       return { success: true, error: null };
     } catch (err) {
@@ -166,8 +166,8 @@ export class PunishmentEngine {
         return { success: false, error: 'No quarantine channel found' };
       }
 
-      await member.roles.set([], 'Elu: Quarantine');
-      await member.voice.disconnect('Elu: Quarantine').catch(() => {});
+      await member.roles.set([], 'Luna: Quarantine');
+      await member.voice.disconnect('Luna: Quarantine').catch(() => {});
       console.log(`[Security] Quarantined ${member.user?.tag || member.id} in ${quarantineChannel.name}`);
       return { success: true, error: null };
     } catch (err) {

@@ -10,7 +10,7 @@ const __dirname = dirname(__filename);
 const DATA_DIR = join(__dirname, "..", "..", "data");
 const DB_PATH = join(DATA_DIR, "antin8.sqlite");
 
-export class EluDatabase {
+export class LunaDatabase {
   #db;
   #statements;
 
@@ -453,4 +453,4 @@ export class EluDatabase {
   }
 }
 
-export default EluDatabase;
+export default LunaDatabase;

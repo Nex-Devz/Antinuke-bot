@@ -47,7 +47,7 @@ export async function handleInviteCreateRole(event, context) {
 
   if (highestRisk.risk >= RISK_HIGH) {
     try {
-      await invite.delete(`Elu: Dangerous role risk ${highestRisk.risk}`);
+      await invite.delete(`Luna: Dangerous role risk ${highestRisk.risk}`);
       console.log(`[Security] Deleted invite with dangerous role in ${guild.name} (${guild.id})`);
     } catch (err) {
       console.log(`[Security] Failed to delete invite in ${guild.name}: ${err.message}`);

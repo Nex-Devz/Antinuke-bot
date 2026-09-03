@@ -19,7 +19,7 @@ export function buildOverviewDashboard(guildState) {
 
   const components = [
     new TextDisplay({
-      content: '# Elu Security',
+      content: '# Luna Security',
     }),
     new TextDisplay({
       content: 'Server protection is active.',

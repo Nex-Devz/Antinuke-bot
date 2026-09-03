@@ -1,5 +1,5 @@
 export async function onReady(client, context) {
-  console.log(`[Elu] Client ready as ${client.user.tag}`);
+  console.log(`[Luna] Client ready as ${client.user.tag}`);
 
   client.user.setActivity('your server | /antinuke', { type: 3 });
 
@@ -47,10 +47,10 @@ export async function onReady(client, context) {
       try {
         await snapshotManager.buildSnapshot(guild);
       } catch (err) {
-        console.error(`[Elu] Failed to build snapshot for guild ${guildId}:`, err.message);
+        console.error(`[Luna] Failed to build snapshot for guild ${guildId}:`, err.message);
       }
     }
   }
 
-  console.log(`[Elu] Protection enabled for ${client.guilds.cache.size} guilds`);
+  console.log(`[Luna] Protection enabled for ${client.guilds.cache.size} guilds`);
 }

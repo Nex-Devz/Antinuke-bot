@@ -13,7 +13,7 @@ export async function handlePermissionOverwriteCreate(event, context) {
   if (detectedDangerous.length > 0) {
     const risk = calculateOverwriteRisk(event, detectedDangerous);
     if (risk >= 70) {
-      await event.overwrite.delete('Elu: Dangerous permission overwrite detected').catch(() => null);
+      await event.overwrite.delete('Luna: Dangerous permission overwrite detected').catch(() => null);
       await punishmentEngine.punish(event.guild.id, event.executorId, 'dangerous_permission_grant', risk);
       await incidentEngine.create(event.guild.id, 'antipermission', 'permission_create', event.executorId, event.overwrite.id, 'critical', risk, { channel: event.channel.id, target: event.overwrite.type === 0 ? 'role' : 'member', targetId: event.overwrite.id, grantedPerms: detectedDangerous }, 'delete_and_punish');
     } else if (risk >= 30) {
@@ -62,9 +62,9 @@ export async function handlePermissionOverwriteUpdate(event, context) {
       if (snapshot?.overwrites) {
         const originalOverwrite = snapshot.overwrites.find(o => o.id === event.overwrite.id);
         if (originalOverwrite) {
-          await event.overwrite.update({ allow: originalOverwrite.allow, deny: originalOverwrite.deny }, 'Elu: Reverting dangerous permission change').catch(() => null);
+          await event.overwrite.update({ allow: originalOverwrite.allow, deny: originalOverwrite.deny }, 'Luna: Reverting dangerous permission change').catch(() => null);
         } else {
-          await event.overwrite.delete('Elu: Removing dangerous permission overwrite').catch(() => null);
+          await event.overwrite.delete('Luna: Removing dangerous permission overwrite').catch(() => null);
         }
       }
       await punishmentEngine.punish(event.guild.id, event.executorId, 'dangerous_permission_update', risk);

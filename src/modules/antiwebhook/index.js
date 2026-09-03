@@ -21,7 +21,7 @@ export async function handleWebhookCreate(event, context) {
 
         if (executorId) {
             const action = config.antiWebhook.actions?.punish || 'ban';
-            await punishmentEngine.punish(guildId, executorId, action, 'Elu: Mass webhook creation');
+            await punishmentEngine.punish(guildId, executorId, action, 'Luna: Mass webhook creation');
         }
 
         await incidentEngine.create(guildId, 'antiWebhook', 'MASS_CREATE', executorId, event.webhook.id, 'high', risk, { webhookCount: guild.webhooks?.cache?.size }, action);
@@ -29,7 +29,7 @@ export async function handleWebhookCreate(event, context) {
 
     if (config.antiWebhook.actions?.delete) {
         try {
-            await event.webhook.delete('Elu: Webhook creation blocked');
+            await event.webhook.delete('Luna: Webhook creation blocked');
             console.log(`[Security] Deleted webhook ${event.webhook.name} in ${guild.name}`);
         } catch (err) {
             console.log(`[Security] Failed to delete webhook: ${err.message}`);
@@ -61,7 +61,7 @@ export async function handleWebhookDelete(event, context) {
 
         if (executorId) {
             const action = config.antiWebhook.actions?.punish || 'ban';
-            await punishmentEngine.punish(guildId, executorId, action, 'Elu: Mass webhook deletion');
+            await punishmentEngine.punish(guildId, executorId, action, 'Luna: Mass webhook deletion');
         }
 
         await incidentEngine.create(guildId, 'antiWebhook', 'MASS_DELETE', executorId, event.webhookId, 'high', risk, { remaining: guild.webhooks?.cache?.size || 0 }, action);
@@ -108,7 +108,7 @@ export async function handleWebhookUpdate(event, context) {
 
         if (executorId) {
             const action = config.antiWebhook.actions?.punish || 'ban';
-            await punishmentEngine.punish(guildId, executorId, action, 'Elu: Dangerous webhook update');
+            await punishmentEngine.punish(guildId, executorId, action, 'Luna: Dangerous webhook update');
         }
 
         await incidentEngine.create(guildId, 'antiWebhook', 'DANGEROUS_UPDATE', executorId, event.webhook.id, 'medium', risk, { changes: dangerousChanges }, action);

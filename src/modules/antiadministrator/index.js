@@ -115,7 +115,7 @@ export async function handleRoleUpdate(event, context) {
     if (analysis.hasAdminAdded) {
       try {
         const revertPermissions = oldRole.permissions;
-        await newRole.setPermissions(revertPermissions, 'Elu: Reverting unauthorized Administrator permission');
+        await newRole.setPermissions(revertPermissions, 'Luna: Reverting unauthorized Administrator permission');
         console.log(`[Security] Reverted Administrator permission on role ${newRole.name}`);
       } catch (error) {
         console.log(`[Security] Failed to revert Administrator permission: ${error.message}`);
@@ -177,7 +177,7 @@ export async function handleMemberUpdate(event, context) {
         });
 
         try {
-          await newMember.roles.remove(role.id, 'Elu: Removing unauthorized Administrator role');
+          await newMember.roles.remove(role.id, 'Luna: Removing unauthorized Administrator role');
           console.log(`[Security] Removed Administrator role ${role.name} from ${newMember.id}`);
         } catch (error) {
           console.log(`[Security] Failed to remove Administrator role: ${error.message}`);

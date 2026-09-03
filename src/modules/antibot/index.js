@@ -79,7 +79,7 @@ export async function handleBotAdd(member, context) {
     if (!allowed) {
       console.log(`[Security] Blocked bot attempted to join: ${member.user.tag} (${botId})`);
 
-      await kickBot(member, 'Elu: Bot is blocked', context);
+      await kickBot(member, 'Luna: Bot is blocked', context);
 
       await incidentEngine.log({
         type: 'BLOCKED_BOT_JOIN',
@@ -116,7 +116,7 @@ export async function handleBotAdd(member, context) {
 
     console.log(`[Security] Unauthorized bot addition: ${member.user.tag} (${botId}) added by ${inviter?.tag || 'unknown'}`);
 
-    await kickBot(member, 'Elu: Unauthorized bot addition', context);
+    await kickBot(member, 'Luna: Unauthorized bot addition', context);
 
     if (inviter) {
       const punishmentConfig = config?.antibot?.inviter_punishment || 'KICK';

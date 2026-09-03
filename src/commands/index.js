@@ -2,7 +2,7 @@ import { SlashCommandBuilder, ApplicationCommandOptionType, PermissionFlagsBits,
 
 const antinukeCommand = new SlashCommandBuilder()
   .setName('antinuke')
-  .setDescription('Elu anti-nuke security commands')
+  .setDescription('Luna anti-nuke security commands')
   .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
   .addSubcommand(sub => sub
     .setName('enable')
@@ -53,7 +53,7 @@ function buildStatusEmbed(config, state, enabled) {
     .join('\n') || 'No modules configured';
 
   return {
-    title: 'Elu Security Status',
+    title: 'Luna Security Status',
     description: enabled ? 'Protection is **ACTIVE**' : 'Protection is **DISABLED**',
     color: enabled ? 0x3BA55C : 0xED4245,
     fields: [
@@ -201,7 +201,7 @@ async function handleCommand(interaction, context) {
 
     return false;
   } catch (error) {
-    console.error('[Elu] Command error:', error);
+    console.error('[Luna] Command error:', error);
     if (interaction.replied || interaction.deferred) return interaction.followUp({ content: 'An error occurred.', ephemeral: true });
     return interaction.reply({ content: 'An error occurred.', ephemeral: true });
   }

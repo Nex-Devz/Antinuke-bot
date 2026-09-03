@@ -40,7 +40,7 @@ export async function handleBanAdd(event, context) {
         console.log(`[Security] Mass ban detected from ${executorId} in ${guild.name} (risk: ${risk})`);
 
         const action = config.antiBan.actions?.punish || 'ban';
-        await punishmentEngine.punish(guildId, executorId, action, 'Elu: Mass ban detected');
+        await punishmentEngine.punish(guildId, executorId, action, 'Luna: Mass ban detected');
 
         await incidentEngine.create(guildId, 'antiban', 'MASS_BAN', executorId, event.ban?.user?.id || event.targetId, 'critical', risk, { banCount: (cache.get(guildId).rateLimits?.get(`${key}:10s`)?.count || 1) }, action);
     }

@@ -34,7 +34,7 @@ import { registerEvents } from './events/index.js';
 import { commandDefinitions, handleCommand, buildStatusEmbed, buildButtons } from './commands/index.js';
 import { onReady } from './events/ready.js';
 
-console.log('[Elu] Starting up...');
+console.log('[Luna] Starting up...');
 
 const database = new Database();
 await database.init();
@@ -130,7 +130,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       }
     }
   } catch (error) {
-    console.error('[Elu] Error:', error);
+    console.error('[Luna] Error:', error);
   }
 });
 
@@ -144,7 +144,7 @@ client.on(Events.MessageCreate, async (message) => {
     try {
       const section = new SectionBuilder()
         .addTextDisplayComponents(
-          new TextDisplayBuilder().setContent('# Elu\nAnti-nuke security bot')
+          new TextDisplayBuilder().setContent('# Luna\nAnti-nuke security bot')
         )
         .setThumbnailAccessory(
           new ThumbnailBuilder().setURL(avatarUrl)
@@ -152,7 +152,7 @@ client.on(Events.MessageCreate, async (message) => {
       container.addSectionComponents(section);
     } catch {
       container.addTextDisplayComponents(
-        new TextDisplayBuilder().setContent('# Elu\nAnti-nuke security bot')
+        new TextDisplayBuilder().setContent('# Luna\nAnti-nuke security bot')
       );
     }
 
@@ -182,7 +182,7 @@ client.on(Events.MessageCreate, async (message) => {
 
   if (command === 'help') {
     const embed = {
-      title: 'Elu Commands',
+      title: 'Luna Commands',
       description: '`/antinuke enable` — Enable protection\n`/antinuke disable` — Disable protection\n`/antinuke status` — Show dashboard\n`/antinuke whitelist add @user` — Whitelist user\n`/antinuke whitelist remove @user` — Remove from whitelist\n`/antinuke owner add @user` — Add extra owner\n`/antinuke owner remove @user` — Remove extra owner\n`/antinuke lockdown` — Activate lockdown\n`/antinuke unlock` — Deactivate lockdown\n`&ping` — Check latency',
       color: 0x5865F2,
       footer: { text: 'Zynrax Development' }
@@ -204,28 +204,28 @@ client.on(Events.ClientReady, async () => {
 const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
 
 try {
-  console.log('[Elu] Registering slash commands...');
+  console.log('[Luna] Registering slash commands...');
   await rest.put(Routes.applicationCommands(process.env.CLIENT_ID), {
     body: commandDefinitions
   });
-  console.log('[Elu] Slash commands registered');
+  console.log('[Luna] Slash commands registered');
 } catch (error) {
-  console.error('[Elu] Failed to register slash commands:', error);
+  console.error('[Luna] Failed to register slash commands:', error);
 }
 
-console.log('[Elu] Logging in...');
+console.log('[Luna] Logging in...');
 await client.login(process.env.TOKEN);
 
 process.on('unhandledRejection', (error) => {
-  console.error('[Elu] Unhandled rejection:', error);
+  console.error('[Luna] Unhandled rejection:', error);
 });
 
 process.on('uncaughtException', (error) => {
-  console.error('[Elu] Uncaught exception:', error);
+  console.error('[Luna] Uncaught exception:', error);
 });
 
 const shutdown = async (signal) => {
-  console.log(`[Elu] Received ${signal}, shutting down...`);
+  console.log(`[Luna] Received ${signal}, shutting down...`);
   client.destroy();
   process.exit(0);
 };

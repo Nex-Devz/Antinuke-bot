@@ -40,7 +40,7 @@ export async function handleKickRemove(event, context) {
         console.log(`[Security] Mass kick detected from ${executorId} in ${guild.name} (risk: ${risk})`);
 
         const action = config.antiKick.actions?.punish || 'ban';
-        await punishmentEngine.punish(guildId, executorId, action, 'Elu: Mass kick detected');
+        await punishmentEngine.punish(guildId, executorId, action, 'Luna: Mass kick detected');
 
         await incidentEngine.create(guildId, 'antikick', 'MASS_KICK', executorId, event.targetId, 'high', risk, { kickCount: (cache.get(guildId).rateLimits?.get(`${key}:10s`)?.count || 1) }, action);
     }
