@@ -1,10 +1,12 @@
 <div align="center">
 
+<img src="https://discordapp.com/api/guilds/1415328129521815696/widget.png?style=banner4" alt="Zynrax Development" width="600" />
+
+<br><br>
+
 # ANTI N8
 
 ### Discord Anti-Nuke & Anti-Abuse Security Bot
-
-**Built by Zynrax Development**
 
 <br>
 
@@ -13,15 +15,13 @@
 ![SQLite](https://img.shields.io/badge/SQLite-WAL-003B57?style=for-the-badge&logo=sqlite&logoColor=white)
 ![License](https://img.shields.io/badge/LICENSE-MIT-yellow?style=for-the-badge)
 
-<br>
+<br><br>
 
-![Discord Server](https://discordapp.com/api/guilds/1415328129521815696/widget.png?style=banner2)
+**Built by Zynrax Development**
 
-<br>
+For support, questions, or just to hang out — join the server
 
-**For support, questions, or just to hang out — join the server**
-
-[discord.gg/zynrax](https://discord.gg/zynrax)
+[![Join Server](https://img.shields.io/badge/JOIN_SERVER-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/zynrax)
 
 </div>
 
