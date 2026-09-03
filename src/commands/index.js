@@ -89,13 +89,16 @@ function buildStatusContainer(config, state, enabled) {
     .map(([k, v]) => `${v.enabled ? (tick || '\u2705') : (cross || '\u274C')} **${formatModuleName(k)}**`)
     .join('\n') || 'No modules configured';
 
+  const hasResources = state.protectedRoles.size > 0 || state.protectedChannels.size > 0;
+  const isFullyActive = enabled && hasResources;
+
   const container = new ContainerBuilder();
 
   if (avatarUrl) {
     try {
       const section = new SectionBuilder()
         .addTextDisplayComponents(
-          new TextDisplayBuilder().setContent(`# Luna Security\nProtection is ${enabled ? '**ACTIVE**' : '**DISABLED**'}`)
+          new TextDisplayBuilder().setContent(`# Luna Security\nProtection is ${isFullyActive ? '**ACTIVE**' : enabled ? '**PARTIAL**' : '**DISABLED**'}`)
         )
         .setThumbnailAccessory(
           new ThumbnailBuilder().setURL(avatarUrl)
@@ -103,12 +106,19 @@ function buildStatusContainer(config, state, enabled) {
       container.addSectionComponents(section);
     } catch {
       container.addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(`# Luna Security\nProtection is ${enabled ? '**ACTIVE**' : '**DISABLED**'}`)
+        new TextDisplayBuilder().setContent(`# Luna Security\nProtection is ${isFullyActive ? '**ACTIVE**' : enabled ? '**PARTIAL**' : '**DISABLED**'}`)
       );
     }
   } else {
     container.addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(`# Luna Security\nProtection is ${enabled ? '**ACTIVE**' : '**DISABLED**'}`)
+      new TextDisplayBuilder().setContent(`# Luna Security\nProtection is ${isFullyActive ? '**ACTIVE**' : enabled ? '**PARTIAL**' : '**DISABLED**'}`)
+    );
+  }
+
+  if (enabled && !hasResources) {
+    container.addSeparatorComponents(new SeparatorBuilder());
+    container.addTextDisplayComponents(
+      new TextDisplayBuilder().setContent('> Modules are enabled but no roles or channels are protected yet. Use `/antinuke` panel or add protected resources.')
     );
   }
 
