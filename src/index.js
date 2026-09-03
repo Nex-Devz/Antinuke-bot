@@ -139,13 +139,19 @@ client.on(Events.MessageCreate, async (message) => {
   if (message.mentions.has(client.user)) {
     const container = new ContainerBuilder()
       .addTextDisplayComponents(
-        new TextDisplayBuilder().setContent('# AntiN8\nAnti-nuke security bot by Zynrax Development')
+        new TextDisplayBuilder().setContent('# AntiN8\nAnti-nuke security bot')
       )
       .addSeparatorComponents(
         new SeparatorBuilder()
       )
       .addTextDisplayComponents(
-        new TextDisplayBuilder().setContent('**Support**\n[discord.gg/zynrax](https://discord.gg/zynrax)')
+        new TextDisplayBuilder().setContent('**Prefix**\n`&help` — Show commands\n`&ping` — Check latency')
+      )
+      .addSeparatorComponents(
+        new SeparatorBuilder()
+      )
+      .addTextDisplayComponents(
+        new TextDisplayBuilder().setContent('**Support Server**\n[discord.gg/zynrax](https://discord.gg/zynrax)\n\nMade by **Zynrax Development**')
       );
 
     return message.reply({
