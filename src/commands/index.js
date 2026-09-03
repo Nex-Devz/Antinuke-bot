@@ -132,19 +132,16 @@ function buildStatusContainer(config, state, enabled) {
     new ButtonBuilder()
       .setCustomId('antinuke_enable')
       .setLabel('Enable All')
-      .setEmoji('\u2705')
       .setStyle(ButtonStyle.Success)
       .setDisabled(enabled),
     new ButtonBuilder()
       .setCustomId('antinuke_disable')
       .setLabel('Disable All')
-      .setEmoji('\u274C')
       .setStyle(ButtonStyle.Danger)
       .setDisabled(!enabled),
     new ButtonBuilder()
       .setCustomId('antinuke_status')
       .setLabel('Refresh')
-      .setEmoji('\uD83D\uDD04')
       .setStyle(ButtonStyle.Primary)
   );
   container.addActionRowComponents(row);
@@ -220,7 +217,14 @@ async function handleCommand(interaction, context) {
       state.client = interaction.client;
       const enabled = config && Object.values(config).some(v => typeof v === 'object' && v !== null && v.enabled === true);
       const container = buildStatusContainer(config, state, enabled);
-      return interaction.reply({ components: [container], flags: 32768, ephemeral: true });
+      await interaction.reply({ components: [container], flags: 32768, ephemeral: true });
+      const msg = await interaction.fetchReply();
+      const collector = msg.createMessageComponentCollector({ time: 60000 });
+      collector.on('end', () => {
+        const disabled = buildStatusContainer(config, state, enabled);
+        interaction.editReply({ components: [disabled] }).catch(() => {});
+      });
+      return;
     }
 
     if (commandName === 'whitelist') {

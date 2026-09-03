@@ -95,6 +95,19 @@ client.on(Events.InteractionCreate, async (interaction) => {
         if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
           return interaction.reply({ content: 'Administrator permission required.', ephemeral: true });
         }
+
+        const loadingContainer = new ContainerBuilder()
+          .addTextDisplayComponents(
+            new TextDisplayBuilder().setContent('# Luna\n**Enabling all modules...**')
+          )
+          .addSeparatorComponents(new SeparatorBuilder())
+          .addTextDisplayComponents(
+            new TextDisplayBuilder().setContent('Please wait a moment')
+          );
+        await interaction.update({ components: [loadingContainer], flags: 32768 });
+
+        await new Promise(r => setTimeout(r, 800));
+
         let config = database.getGuildConfig(guildId);
         if (!config) await database.initGuildConfig(guildId);
         config = database.getGuildConfig(guildId);
@@ -108,13 +121,26 @@ client.on(Events.InteractionCreate, async (interaction) => {
         const state = cache.get(guildId);
         state.client = interaction.client;
         const container = buildStatusContainer(config, state, true);
-        return interaction.update({ components: [container], flags: 32768 });
+        return interaction.editReply({ components: [container] });
       }
 
       if (interaction.customId === 'antinuke_disable') {
         if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
           return interaction.reply({ content: 'Administrator permission required.', ephemeral: true });
         }
+
+        const loadingContainer = new ContainerBuilder()
+          .addTextDisplayComponents(
+            new TextDisplayBuilder().setContent('# Luna\n**Disabling all modules...**')
+          )
+          .addSeparatorComponents(new SeparatorBuilder())
+          .addTextDisplayComponents(
+            new TextDisplayBuilder().setContent('Please wait a moment')
+          );
+        await interaction.update({ components: [loadingContainer], flags: 32768 });
+
+        await new Promise(r => setTimeout(r, 800));
+
         let config = database.getGuildConfig(guildId);
         if (!config) await database.initGuildConfig(guildId);
         config = database.getGuildConfig(guildId);
@@ -128,7 +154,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
         const state = cache.get(guildId);
         state.client = interaction.client;
         const container = buildStatusContainer(config, state, false);
-        return interaction.update({ components: [container], flags: 32768 });
+        return interaction.editReply({ components: [container] });
       }
 
       if (interaction.customId === 'antinuke_status') {
@@ -262,7 +288,13 @@ client.on(Events.MessageCreate, async (message) => {
     state.client = client;
     const enabled = config && Object.values(config).some(v => typeof v === 'object' && v !== null && v.enabled === true);
     const container = buildStatusContainer(config, state, enabled);
-    return message.reply({ components: [container], flags: 32768 });
+    const reply = await message.reply({ components: [container], flags: 32768 });
+    const collector = reply.createMessageComponentCollector({ time: 60000 });
+    collector.on('end', () => {
+      const disabled = buildStatusContainer(config, state, enabled);
+      reply.edit({ components: [disabled] }).catch(() => {});
+    });
+    return reply;
   }
 });
 
