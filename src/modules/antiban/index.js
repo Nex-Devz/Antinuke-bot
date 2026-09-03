@@ -7,43 +7,50 @@ const DEFAULT_THRESHOLDS = {
 export async function handleBanAdd(event, context) {
     const { client, cache, incidentEngine, punishmentEngine, auditCorrelator, whitelistManager, ownerManager } = context;
     const guild = event.guild;
-    const guildId = guild.id;
-    const config = cache.get(guildId).config;
+    const guildId = guild?.id;
+    if (!guildId) return;
 
+    const guildData = cache.get(guildId);
+    if (!guildData) return;
+    const config = guildData.config;
     if (!config?.antiBan?.enabled) return;
 
-    const executorId = event.executorId || await auditCorrelator.resolveBanExecutor(guild, event.ban?.user?.id || event.targetId);
+    try {
+        const executorId = event.executorId || await auditCorrelator.resolveBanExecutor(guild, event.ban?.user?.id || event.targetId);
 
-    if (executorId) {
-        if (whitelistManager.isWhitelisted(guildId, executorId, 'BAN_ADD')) return;
-        if (ownerManager.isOwner(guildId, executorId)) return;
+        if (executorId) {
+            if (whitelistManager.isWhitelisted(guildId, executorId, 'BAN_ADD')) return;
+            if (ownerManager.isOwner(guildId, executorId)) return;
+        }
+
+        const thresholds = config.antiBan.thresholds || DEFAULT_THRESHOLDS;
+        const key = `ban:${executorId || 'unknown'}`;
+
+        let exceeded = false;
+        let risk = 0;
+
+        if (!cache.checkRateLimit(guildId, `${key}:10s`, thresholds.window10s?.max || 5, thresholds.window10s?.windowMs || 10000)) {
+            exceeded = true;
+            risk = 90;
+        } else if (!cache.checkRateLimit(guildId, `${key}:30s`, thresholds.window30s?.max || 10, thresholds.window30s?.windowMs || 30000)) {
+            exceeded = true;
+            risk = 75;
+        } else if (!cache.checkRateLimit(guildId, `${key}:60s`, thresholds.window60s?.max || 20, thresholds.window60s?.windowMs || 60000)) {
+            exceeded = true;
+            risk = 60;
+        }
+
+        if (exceeded && executorId) {
+            console.log(`[Security] Mass ban detected from ${executorId} in ${guild.name} (risk: ${risk})`);
+
+            const action = config.antiBan.actions?.punish || 'ban';
+            await punishmentEngine.punish(guildId, executorId, action, 'Luna: Mass ban detected');
+
+            await incidentEngine.create(guildId, 'antiban', 'MASS_BAN', executorId, event.ban?.user?.id || event.targetId, 'critical', risk, { banCount: (guildData.rateLimits?.get(`${key}:10s`)?.count || 1) }, action);
+        }
+
+        console.log(`[Security] Ban added: ${event.ban?.user?.id || event.targetId} in ${guild.name}`);
+    } catch (err) {
+        console.error(`[Security] Error in handleBanAdd for guild ${guildId}:`, err);
     }
-
-    const thresholds = config.antiBan.thresholds || DEFAULT_THRESHOLDS;
-    const key = `ban:${executorId || 'unknown'}`;
-
-    let exceeded = false;
-    let risk = 0;
-
-    if (!cache.checkRateLimit(guildId, `${key}:10s`, thresholds.window10s?.max || 5, thresholds.window10s?.windowMs || 10000)) {
-        exceeded = true;
-        risk = 90;
-    } else if (!cache.checkRateLimit(guildId, `${key}:30s`, thresholds.window30s?.max || 10, thresholds.window30s?.windowMs || 30000)) {
-        exceeded = true;
-        risk = 75;
-    } else if (!cache.checkRateLimit(guildId, `${key}:60s`, thresholds.window60s?.max || 20, thresholds.window60s?.windowMs || 60000)) {
-        exceeded = true;
-        risk = 60;
-    }
-
-    if (exceeded && executorId) {
-        console.log(`[Security] Mass ban detected from ${executorId} in ${guild.name} (risk: ${risk})`);
-
-        const action = config.antiBan.actions?.punish || 'ban';
-        await punishmentEngine.punish(guildId, executorId, action, 'Luna: Mass ban detected');
-
-        await incidentEngine.create(guildId, 'antiban', 'MASS_BAN', executorId, event.ban?.user?.id || event.targetId, 'critical', risk, { banCount: (cache.get(guildId).rateLimits?.get(`${key}:10s`)?.count || 1) }, action);
-    }
-
-    console.log(`[Security] Ban added: ${event.ban?.user?.id || event.targetId} in ${guild.name}`);
 }

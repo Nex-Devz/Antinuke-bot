@@ -1,88 +1,112 @@
 export async function handleChannelCreate(event, context) {
   const { client, cache, database, incidentEngine, punishmentEngine, snapshotManager, auditCorrelator, whitelistManager, ownerManager } = context;
-  const config = await database.getConfig(event.guild.id);
+  const guild = event.guild;
+  const guildId = guild?.id;
+  if (!guildId) return;
+
+  const config = await database.getConfig(guildId);
   if (!config?.modules?.antichannel?.enabled) return;
 
-  if (await whitelistManager.isWhitelisted(event.guild.id, event.executorId)) return;
-  if (await ownerManager.isExtraOwner(event.guild.id, event.executorId)) return;
+  try {
+    if (await whitelistManager.isWhitelisted(guildId, event.executorId)) return;
+    if (await ownerManager.isExtraOwner(guildId, event.executorId)) return;
 
-  await snapshotManager.captureChannel(event.guild.id, event.channel);
+    await snapshotManager.captureChannel(guildId, event.channel);
 
-  const recentCreates = await cache.getChannelCreates(event.guild.id);
-  const risk = calculateChannelCreateRisk(event, recentCreates);
+    const recentCreates = await cache.getChannelCreates(guildId);
+    const risk = calculateChannelCreateRisk(event, recentCreates);
 
-  if (risk >= 70) {
-    await event.channel.delete().catch(() => null);
-    await punishmentEngine.punish(event.guild.id, event.executorId, 'channel_create_spam', risk);
-    await incidentEngine.create(event.guild.id, 'antichannel', 'channel_create', event.executorId, event.channel.id, 'critical', risk, { recentCreates, channel: event.channel.toJSON() }, 'delete_and_punish');
-  } else if (risk >= 30) {
-    await incidentEngine.create(event.guild.id, 'antichannel', 'channel_create', event.executorId, event.channel.id, 'warning', risk, { recentCreates, channel: event.channel.toJSON() }, 'log_only');
+    if (risk >= 70) {
+      await event.channel.delete().catch(() => null);
+      await punishmentEngine.punish(guildId, event.executorId, 'channel_create_spam', risk);
+      await incidentEngine.create(guildId, 'antichannel', 'channel_create', event.executorId, event.channel.id, 'critical', risk, { recentCreates, channel: event.channel.toJSON() }, 'delete_and_punish');
+    } else if (risk >= 30) {
+      await incidentEngine.create(guildId, 'antichannel', 'channel_create', event.executorId, event.channel.id, 'warning', risk, { recentCreates, channel: event.channel.toJSON() }, 'log_only');
+    }
+  } catch (err) {
+    console.error(`[Security] Error in handleChannelCreate for guild ${guildId}:`, err);
   }
 }
 
 export async function handleChannelDelete(event, context) {
   const { client, cache, database, incidentEngine, punishmentEngine, snapshotManager, auditCorrelator, whitelistManager, ownerManager } = context;
-  const config = await database.getConfig(event.guild.id);
+  const guild = event.guild;
+  const guildId = guild?.id;
+  if (!guildId) return;
+
+  const config = await database.getConfig(guildId);
   if (!config?.modules?.antichannel?.enabled) return;
 
-  if (await whitelistManager.isWhitelisted(event.guild.id, event.executorId)) return;
-  if (await ownerManager.isExtraOwner(event.guild.id, event.executorId)) return;
+  try {
+    if (await whitelistManager.isWhitelisted(guildId, event.executorId)) return;
+    if (await ownerManager.isExtraOwner(guildId, event.executorId)) return;
 
-  const recentDeletes = await cache.getChannelDeletes(event.guild.id);
-  const risk = calculateChannelDeleteRisk(event, recentDeletes);
+    const recentDeletes = await cache.getChannelDeletes(guildId);
+    const risk = calculateChannelDeleteRisk(event, recentDeletes);
 
-  if (risk >= 70) {
-    const snapshot = await snapshotManager.getChannelSnapshot(event.guild.id, event.channel.id);
-    if (snapshot) {
-      const restored = await event.guild.channels.create(snapshot.name, {
-        type: snapshot.type,
-        topic: snapshot.topic,
-        nsfw: snapshot.nsfw,
-        parent: snapshot.parentId ? await event.guild.channels.fetch(snapshot.parentId).catch(() => null) : null,
-        permissionOverwrites: snapshot.overwrites || []
-      }).catch(() => null);
-      if (restored && snapshot.position) await restored.setPosition(snapshot.position).catch(() => null);
+    if (risk >= 70) {
+      const snapshot = await snapshotManager.getChannelSnapshot(guildId, event.channel.id);
+      if (snapshot) {
+        const restored = await guild.channels.create(snapshot.name, {
+          type: snapshot.type,
+          topic: snapshot.topic,
+          nsfw: snapshot.nsfw,
+          parent: snapshot.parentId ? await guild.channels.fetch(snapshot.parentId).catch(() => null) : null,
+          permissionOverwrites: snapshot.overwrites || []
+        }).catch(() => null);
+        if (restored && snapshot.position) await restored.setPosition(snapshot.position).catch(() => null);
+      }
+      await punishmentEngine.punish(guildId, event.executorId, 'channel_delete_spam', risk);
+      await incidentEngine.create(guildId, 'antichannel', 'channel_delete', event.executorId, event.channel.id, 'critical', risk, { recentDeletes, channel: event.channel.toJSON() }, 'restore_and_punish');
+    } else if (risk >= 30) {
+      await incidentEngine.create(guildId, 'antichannel', 'channel_delete', event.executorId, event.channel.id, 'warning', risk, { recentDeletes, channel: event.channel.toJSON() }, 'log_only');
     }
-    await punishmentEngine.punish(event.guild.id, event.executorId, 'channel_delete_spam', risk);
-    await incidentEngine.create(event.guild.id, 'antichannel', 'channel_delete', event.executorId, event.channel.id, 'critical', risk, { recentDeletes, channel: event.channel.toJSON() }, 'restore_and_punish');
-  } else if (risk >= 30) {
-    await incidentEngine.create(event.guild.id, 'antichannel', 'channel_delete', event.executorId, event.channel.id, 'warning', risk, { recentDeletes, channel: event.channel.toJSON() }, 'log_only');
+  } catch (err) {
+    console.error(`[Security] Error in handleChannelDelete for guild ${guildId}:`, err);
   }
 }
 
 export async function handleChannelUpdate(event, context) {
   const { client, cache, database, incidentEngine, punishmentEngine, snapshotManager, auditCorrelator, whitelistManager, ownerManager } = context;
-  const config = await database.getConfig(event.guild.id);
+  const guild = event.guild;
+  const guildId = guild?.id;
+  if (!guildId) return;
+
+  const config = await database.getConfig(guildId);
   if (!config?.modules?.antichannel?.enabled) return;
 
-  if (await whitelistManager.isWhitelisted(event.guild.id, event.executorId)) return;
-  if (await ownerManager.isExtraOwner(event.guild.id, event.executorId)) return;
+  try {
+    if (await whitelistManager.isWhitelisted(guildId, event.executorId)) return;
+    if (await ownerManager.isExtraOwner(guildId, event.executorId)) return;
 
-  const dangerousPerms = ['Administrator', 'ManageChannels', 'ManageRoles', 'ManageGuild'];
-  const changedOverwrites = [];
+    const dangerousPerms = ['Administrator', 'ManageChannels', 'ManageRoles', 'ManageGuild'];
+    const changedOverwrites = [];
 
-  for (const [id, overwrite] of event.channel.permissionOverwrites) {
-    const oldOverwrite = event.old.channel?.permissionOverwrites.get(id);
-    if (!oldOverwrite) {
-      if (hasDangerousPerms(overwrite, dangerousPerms)) changedOverwrites.push({ id, type: 'added', overwrite });
-    } else {
-      const addedPerms = getAddedPermissions(oldOverwrite, overwrite, dangerousPerms);
-      if (addedPerms.length > 0) changedOverwrites.push({ id, type: 'modified', addedPerms, overwrite });
-    }
-  }
-
-  if (changedOverwrites.length > 0) {
-    const risk = calculatePermissionChangeRisk(changedOverwrites);
-    if (risk >= 70) {
-      const snapshot = await snapshotManager.getChannelSnapshot(event.guild.id, event.channel.id);
-      if (snapshot?.overwrites) {
-        await event.channel.edit({ permissionOverwrites: snapshot.overwrites }).catch(() => null);
+    for (const [id, overwrite] of event.channel.permissionOverwrites) {
+      const oldOverwrite = event.old.channel?.permissionOverwrites?.get(id);
+      if (!oldOverwrite) {
+        if (hasDangerousPerms(overwrite, dangerousPerms)) changedOverwrites.push({ id, type: 'added', overwrite });
+      } else {
+        const addedPerms = getAddedPermissions(oldOverwrite, overwrite, dangerousPerms);
+        if (addedPerms.length > 0) changedOverwrites.push({ id, type: 'modified', addedPerms, overwrite });
       }
-      await punishmentEngine.punish(event.guild.id, event.executorId, 'dangerous_permission_overwrite', risk);
-      await incidentEngine.create(event.guild.id, 'antichannel', 'permission_overwrite', event.executorId, event.channel.id, 'critical', risk, { changedOverwrites }, 'revert_and_punish');
-    } else if (risk >= 30) {
-      await incidentEngine.create(event.guild.id, 'antichannel', 'permission_overwrite', event.executorId, event.channel.id, 'warning', risk, { changedOverwrites }, 'log_only');
     }
+
+    if (changedOverwrites.length > 0) {
+      const risk = calculatePermissionChangeRisk(changedOverwrites);
+      if (risk >= 70) {
+        const snapshot = await snapshotManager.getChannelSnapshot(guildId, event.channel.id);
+        if (snapshot?.overwrites) {
+          await event.channel.edit({ permissionOverwrites: snapshot.overwrites }).catch(() => null);
+        }
+        await punishmentEngine.punish(guildId, event.executorId, 'dangerous_permission_overwrite', risk);
+        await incidentEngine.create(guildId, 'antichannel', 'permission_overwrite', event.executorId, event.channel.id, 'critical', risk, { changedOverwrites }, 'revert_and_punish');
+      } else if (risk >= 30) {
+        await incidentEngine.create(guildId, 'antichannel', 'permission_overwrite', event.executorId, event.channel.id, 'warning', risk, { changedOverwrites }, 'log_only');
+      }
+    }
+  } catch (err) {
+    console.error(`[Security] Error in handleChannelUpdate for guild ${guildId}:`, err);
   }
 }
 
