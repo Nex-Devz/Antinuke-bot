@@ -1,208 +1,242 @@
-# AntiN8
+<div align="center">
 
-Production-grade Discord Anti-Nuke and Anti-Abuse security bot by Zynrax Development.
+# ANTI N8
 
-<p align="center">
-  <a href="https://discord.gg/zynrax">
-    <img src="https://img.shields.io/discord/1415328129521815696?label=Support%20Server&logo=discord&logoColor=white&color=5865F2" alt="Discord Server" />
-  </a>
-  <img src="https://img.shields.io/badge/Node.js-18%2B-green" alt="Node.js" />
-  <img src="https://img.shields.io/badge/Discord.js-14-blue" alt="Discord.js" />
-  <img src="https://img.shields.io/badge/License-MIT-yellow" alt="License" />
-</p>
+### Discord Anti-Nuke & Anti-Abuse Security Bot
 
-<p align="center">
-  <b>For questions, issues, or support — join our Discord server</b><br>
-  <a href="https://discord.gg/zynrax">discord.gg/zynrax</a>
-</p>
+**Built by Zynrax Development**
+
+<br>
+
+![Discord](https://img.shields.io/badge/DISCORD-5865F2?style=for-the-badge&logo=discord&logoColor=white)
+![Node.js](https://img.shields.io/badge/NODE.JS-18%2B-339933?style=for-the-badge&logo=node.js&logoColor=white)
+![SQLite](https://img.shields.io/badge/SQLite-WAL-003B57?style=for-the-badge&logo=sqlite&logoColor=white)
+![License](https://img.shields.io/badge/LICENSE-MIT-yellow?style=for-the-badge)
+
+<br>
+
+![Discord Server](https://discordapp.com/api/guilds/1415328129521815696/widget.png?style=banner2)
+
+<br>
+
+**For support, questions, or just to hang out — join the server**
+
+[discord.gg/zynrax](https://discord.gg/zynrax)
+
+</div>
 
 ---
 
-## Why AntiN8
+## What is AntiN8?
 
-Most anti-nuke bots rely on polling, external databases, or incomplete detection. AntiN8 uses a Gateway-first architecture — events are processed as they arrive, state is cached in memory, and the Discord API is only touched when absolutely necessary. Faster response, lower resource usage, more reliable protection.
+AntiN8 is a production-grade Discord security bot that protects your server from nukes, raids, and abuse. It monitors every Gateway event in real time, applies risk analysis, and enforces configurable punishments — all without polling or external databases.
 
-Every security decision is based on actual Discord permission flags, not role names. Every punishment is validated against hierarchy before execution. Every incident is logged with full context.
+Gateway first. Memory first. SQLite second. Discord API last.
 
 ---
 
-## Security Modules
+## 20 Security Modules
 
-| Module | What it does |
-|--------|-------------|
-| Anti Channel Nuke | Detects mass channel creation, deletion, and permission overwrite abuse. Restores from snapshots. |
-| Anti Role Nuke | Detects mass role creation, deletion, and dangerous permission escalation. |
-| Anti Permission Nuke | Blocks dangerous permission grants on protected channels. |
-| Anti Webhook Nuke | Tracks webhook creation/deletion rates. Protects designated webhooks. |
-| Anti Emoji/Sticker Nuke | Detects mass emoji and sticker creation/deletion spam. |
-| Anti Ban | Detects mass ban waves with multi-window thresholds. Resolves executor via audit logs. |
-| Anti Kick | Same architecture as Anti Ban for kick actions. |
-| Anti Member Role Abuse | Tracks rapid role assignment/removal and dangerous role grants. |
-| Anti Admin Escalation | Detects when Administrator permission is added to roles or members. |
-| Anti Bot Add | Blocks unauthorized bots. Maintains trusted/allowed/blocked lists. |
-| Anti Integration Abuse | Monitors integration creation, update, and deletion. |
-| Anti AutoMod Abuse | Protects AutoMod rule configuration from tampering. |
-| Anti Scheduled Event Abuse | Detects event creation and deletion spam. |
-| Anti Invite Nuke | Detects invite creation/deletion spam with in-memory cache. |
-| Anti Invite Role | Inspects invite role payloads for dangerous permissions. |
-| Anti Linked Role | Protects Discord Linked Roles from deletion and modification. |
-| Anti Raid | Tracks member join velocity. Activates lockdown on threshold breach. |
-| Anti Mass Mention | Detects @everyone and @here mention floods. |
-| Emergency Lockdown | Server-wide lockdown that increases sensitivity across all modules. |
+<details>
+<summary><b>Channel Protection</b></summary>
+
+- Anti Channel Nuke — mass create, delete, permission overwrite abuse
+- Anti Permission Nuke — dangerous grants on protected channels
+- Snapshot restore for deleted channels
+
+</details>
+
+<details>
+<summary><b>Role Protection</b></summary>
+
+- Anti Role Nuke — mass create, delete, permission escalation
+- Anti Admin Escalation — detects Administrator permission addition
+- Anti Member Role Abuse — rapid role assignment/removal
+- Anti Linked Role — Discord Linked Role protection
+- Snapshot restore for deleted roles
+
+</details>
+
+<details>
+<summary><b>Abuse Prevention</b></summary>
+
+- Anti Ban — multi-window mass ban detection (5/10s, 10/30s, 20/60s)
+- Anti Kick — same architecture for kicks
+- Anti Raid — member join velocity tracking
+- Anti Mass Mention — @everyone/@here flood detection
+- Anti Bot Add — unauthorized bot blocking
+- Anti Webhook Nuke — webhook creation/deletion tracking
+
+</details>
+
+<details>
+<summary><b>Resource Protection</b></summary>
+
+- Anti Invite Nuke — invite spam detection
+- Anti Invite Role — dangerous role payloads in invites
+- Anti Emoji/Sticker Nuke — creation/deletion spam
+- Anti Integration Abuse — integration tampering
+- Anti AutoMod Abuse — AutoMod rule protection
+- Anti Scheduled Event Abuse — event spam
+- Emergency Lockdown — server-wide lockdown mode
+
+</details>
 
 ---
 
 ## Architecture
 
 ```
-Gateway Event  ->  Memory Cache  ->  Local Security Check  ->  Targeted API (only if needed)
+   Discord Gateway Event
+          |
+    Memory Cache Check
+          |
+   Local Risk Calculation
+          |
+   Targeted API Request (only when needed)
 ```
 
-- **Gateway First** — All detection from Discord Gateway events. No polling.
-- **Memory First** — Rate limits, dedup, snapshots, audit cache in Maps/Sets.
-- **SQLite Second** — Config, whitelist, owners, incidents, punishment history.
-- **API Last** — REST and audit logs only when executor is unknown.
+| Layer | What | Where |
+|-------|------|-------|
+| Hot Path | Rate limits, dedup, snapshots, audit cache | JavaScript Map/Set |
+| Cold Path | Config, whitelist, owners, incidents | SQLite (WAL mode) |
+| External | Audit logs, executor resolution | Discord REST API |
 
 ---
 
 ## Permission Risk Engine
 
-Roles scored by actual permission flags:
+Every role is scored by its actual Discord permission flags — never by name.
 
-| Permission | Weight |
-|------------|--------|
-| Administrator | 100 |
-| ManageGuild / ManageRoles | 90 |
-| ManageChannels | 80 |
-| ManageWebhooks / BanMembers | 70 |
-| KickMembers | 60 |
-| ModerateMembers | 50 |
-| ManageMessages / MentionEveryone | 30-40 |
+```
+Administrator       100  ████████████████████
+ManageGuild          90  ██████████████████
+ManageRoles          90  ██████████████████
+ManageChannels       80  ████████████████
+ManageWebhooks       70  ██████████████
+BanMembers           70  ██████████████
+KickMembers          60  ████████████
+ModerateMembers      50  ██████████
+ManageMessages       40  ████████
+MentionEveryone      30  ██████
+```
 
-Risk levels: **LOW** (0-29) | **MEDIUM** (30-69) | **HIGH** (70-89) | **CRITICAL** (90-100)
+**Risk Levels**
+
+| Level | Range | Action |
+|-------|-------|--------|
+| LOW | 0-29 | Log |
+| MEDIUM | 30-69 | Log + Notify |
+| HIGH | 70-89 | Delete + Log |
+| CRITICAL | 90-100 | Delete + Punish + Incident |
 
 ---
 
 ## Punishment Engine
 
-| Severity | Default Action |
-|----------|----------------|
-| LOW | Log only |
-| MEDIUM | Strip roles |
-| HIGH | Kick |
-| CRITICAL | Ban |
+| Severity | Default | Options |
+|----------|---------|---------|
+| LOW | Log | NONE, LOG |
+| MEDIUM | Strip Roles | STRIP_ROLES, REMOVE_DANGEROUS_ROLE, TIMEOUT |
+| HIGH | Kick | KICK, TIMEOUT, QUARANTINE |
+| CRITICAL | Ban | BAN, KICK |
 
-All punishments verify bot permissions, role hierarchy, and target manageability. The bot never punishes itself or the guild owner.
+All punishments verify: bot permissions, role hierarchy, target manageability, not guild owner, not the bot itself.
 
 ---
 
 ## Commands
 
-| Command | Permission | Description |
-|---------|------------|-------------|
-| `/security setup` | Admin | Initialize security |
-| `/security status` | Manage Server | Show status dashboard |
-| `/security lockdown` | Admin | Activate lockdown |
-| `/security unlock` | Admin | Deactivate lockdown |
-| `/security whitelist add` | Admin | Whitelist user/role |
-| `/security whitelist remove` | Admin | Remove from whitelist |
-| `/security whitelist list` | Manage Server | List whitelist |
-| `/security owner add` | Admin | Add extra owner |
-| `/security owner remove` | Admin | Remove extra owner |
-| `/security owner list` | Manage Server | List extra owners |
-| `/security protection enable` | Admin | Enable module |
-| `/security protection disable` | Admin | Disable module |
-| `/security protection toggle` | Admin | Toggle module |
-| `/security thresholds ban` | Admin | Set ban thresholds |
-| `/security thresholds kick` | Admin | Set kick thresholds |
-| `/security thresholds channel` | Admin | Set channel thresholds |
-| `/security thresholds role` | Admin | Set role thresholds |
-| `/security thresholds view` | Manage Server | View thresholds |
-| `/security punishments set` | Admin | Set punishment |
-| `/security punishments view` | Manage Server | View punishments |
-| `/security incidents` | Manage Server | View incidents |
-| `/security logs` | Manage Server | View logs |
-| `/security protected role add` | Admin | Protect role |
-| `/security protected role remove` | Admin | Unprotect role |
-| `/security protected role list` | Manage Server | List protected roles |
-| `/security protected channel add` | Admin | Protect channel |
-| `/security protected channel remove` | Admin | Unprotect channel |
-| `/security protected channel list` | Manage Server | List protected channels |
-| `/security protected webhook add` | Admin | Protect webhook |
-| `/security protected webhook remove` | Admin | Unprotect webhook |
-| `/security protected webhook list` | Manage Server | List protected webhooks |
+```
+/security setup              Initialize security
+/security status             Show dashboard
+/security config             View configuration
+/security lockdown           Activate lockdown
+/security unlock             Deactivate lockdown
+
+/security whitelist add      Whitelist user/role
+/security whitelist remove   Remove from whitelist
+/security whitelist list     List entries
+
+/security owner add          Add extra owner
+/security owner remove       Remove extra owner
+/security owner list         List owners
+
+/security protection enable  Enable module
+/security protection disable Disable module
+/security protection toggle  Toggle module
+
+/security thresholds ban     Set ban threshold
+/security thresholds kick    Set kick threshold
+/security thresholds view    View all thresholds
+
+/security punishments set    Set punishment
+/security punishments view   View punishments
+
+/security incidents          View incidents
+/security logs               View logs
+
+/security protected role add       Protect role
+/security protected role remove    Unprotect role
+/security protected role list      List protected roles
+/security protected channel add    Protect channel
+/security protected channel remove Unprotect channel
+/security protected channel list   List protected channels
+/security protected webhook add    Protect webhook
+/security protected webhook remove Unprotect webhook
+/security protected webhook list   List protected webhooks
+```
 
 ---
 
-## Setup
-
-### Prerequisites
-
-- Node.js 18+
-- Discord bot with these intents: Guilds, GuildMembers, GuildBans, GuildInvites, GuildWebhooks, GuildEmojisAndStickers, GuildScheduledEvents, MessageContent, GuildMessages, AutoModerationConfiguration, AutoModerationExecution
-- Bot must have Administrator permission in target guilds
-
-### Install
+## Quick Start
 
 ```bash
 git clone https://github.com/Nex-Devz/Antinuke-bot.git
 cd Antinuke-bot
 npm install
-```
-
-### Configure
-
-```bash
 cp .env.example .env
 ```
 
-Set in `.env`:
+Edit `.env`:
 
 ```
-TOKEN=your_bot_token_here
-CLIENT_ID=your_bot_client_id_here
+TOKEN=your_bot_token
+CLIENT_ID=your_client_id
 ```
-
-### Run
 
 ```bash
 npm start
 ```
 
-### First-Time Setup
-
-1. Invite bot with Administrator permission
-2. Run `/security setup`
-3. Protect roles: `/security protected role add @role`
-4. Protect channels: `/security protected channel add #channel`
-5. Whitelist trusted users: `/security whitelist add @user`
-6. Check status: `/security status`
+Then in Discord: `/security setup`
 
 ---
 
-## Tech Stack
+## Tech
 
-| Component | Technology |
-|-----------|------------|
+| | |
+|---|---|
 | Runtime | Node.js 18+ |
-| Discord | Discord.js 14 |
+| Library | Discord.js 14 |
 | Database | SQLite (better-sqlite3) |
-| Caching | Native Map, Set, WeakMap |
-| UI | Discord Components V2 |
+| Cache | Native Map/Set |
+| UI | Components V2 |
 
-No Redis. No MongoDB. No TypeScript. No external databases.
+No Redis. No MongoDB. No TypeScript. No polling.
 
 ---
 
 ## Support
 
-- Discord: https://discord.gg/zynrax
-- Issues: Open an issue on the repository
+**Join the Discord server for help, bug reports, or feature requests**
 
-When reporting a bug include: bot version, Node.js version, steps to reproduce, expected vs actual behavior, and console output.
+[discord.gg/zynrax](https://discord.gg/zynrax)
 
 ---
 
-## License
+<div align="center">
 
-MIT
+**Made by Zynrax Development**
+
+</div>
