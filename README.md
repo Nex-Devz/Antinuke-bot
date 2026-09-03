@@ -514,6 +514,8 @@ A single guild operation failure never crashes the entire bot.
 For questions, bug reports, or feature requests:
 
 - Discord Support Server: https://discord.gg/zynrax
+- Server ID: `1415328129521815696`
+- Server Widget: https://discord.com/api/guilds/1415328129521815696/widget.png
 - Open an issue on the repository
 
 When reporting a bug, include:
