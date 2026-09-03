@@ -254,7 +254,7 @@ export async function handleMemberAdd(event, context) {
 
       for (const roleId of dangerousAutoRoles) {
         try {
-          await member.roles.remove(roleId, 'AntiN8: Dangerous auto-role removal');
+          await member.roles.remove(roleId, 'Elu: Dangerous auto-role removal');
         } catch (err) {
           console.log(`[Security] Failed to remove dangerous auto-role ${roleId}: ${err.message}`);
         }

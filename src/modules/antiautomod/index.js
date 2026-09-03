@@ -99,7 +99,7 @@ export async function handleAutoModRuleCreate(event, context) {
       console.log(`[Security] Suspicious automod rule created by ${executor.id}: Risk ${riskScore}`);
 
       if (config?.antiautomod?.auto_delete) {
-        await deleteAutomodRule(rule.guild, rule.id, client, 'AntiN8: Suspicious automod rule');
+        await deleteAutomodRule(rule.guild, rule.id, client, 'Elu: Suspicious automod rule');
       }
 
       const punishmentType = riskScore >= 70 ? 'BAN' : riskScore >= 50 ? 'TEMPBAN' : 'KICK';
@@ -172,7 +172,7 @@ export async function handleAutoModRuleUpdate(event, context) {
             exempt_roles: oldRule.exempt_roles,
             exempt_channels: oldRule.exempt_channels,
             enabled: oldRule.enabled
-          }, 'AntiN8: Reverting suspicious automod changes');
+          }, 'Elu: Reverting suspicious automod changes');
           console.log(`[Security] Reverted automod rule changes for ${newRule.id}`);
         } catch (error) {
           console.log(`[Security] Failed to revert automod rule: ${error.message}`);

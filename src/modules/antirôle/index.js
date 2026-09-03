@@ -42,7 +42,7 @@ export async function handleRoleDelete(event, context) {
         hoist: snapshot.hoist,
         mentionable: snapshot.mentionable,
         permissions: snapshot.permissions,
-        reason: 'AntiN8: Restoring deleted role'
+        reason: 'Elu: Restoring deleted role'
       }).catch(() => null);
       if (restored && snapshot.position) await restored.setPosition(snapshot.position).catch(() => null);
     }
@@ -70,7 +70,7 @@ export async function handleRoleUpdate(event, context) {
     if (risk >= 70) {
       const snapshot = await snapshotManager.getRoleSnapshot(event.guild.id, event.role.id);
       if (snapshot) {
-        await event.role.setPermissions(snapshot.permissions, 'AntiN8: Reverting dangerous permission change').catch(() => null);
+        await event.role.setPermissions(snapshot.permissions, 'Elu: Reverting dangerous permission change').catch(() => null);
       }
       await punishmentEngine.punish(event.guild.id, event.executorId, 'role_permission_escalation', risk);
       await incidentEngine.create(event.guild.id, 'antirôle', 'role_update', event.executorId, event.role.id, 'critical', risk, { addedPermissions: escalation.added, removedPermissions: escalation.removed }, 'revert_and_punish');

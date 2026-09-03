@@ -14,6 +14,7 @@ import {
   TextDisplayBuilder,
   SeparatorBuilder,
   SectionBuilder,
+  ThumbnailBuilder,
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
@@ -33,7 +34,7 @@ import { registerEvents } from './events/index.js';
 import { commandDefinitions, handleCommand, buildStatusEmbed, buildButtons } from './commands/index.js';
 import { onReady } from './events/ready.js';
 
-console.log('[AntiN8] Starting up...');
+console.log('[Elu] Starting up...');
 
 const database = new Database();
 await database.init();
@@ -129,7 +130,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       }
     }
   } catch (error) {
-    console.error('[AntiN8] Error:', error);
+    console.error('[Elu] Error:', error);
   }
 });
 
@@ -137,10 +138,25 @@ client.on(Events.MessageCreate, async (message) => {
   if (message.author.bot) return;
 
   if (message.mentions.has(client.user)) {
-    const container = new ContainerBuilder()
-      .addTextDisplayComponents(
-        new TextDisplayBuilder().setContent('# AntiN8\nAnti-nuke security bot')
-      )
+    const avatarUrl = client.user.displayAvatarURL({ size: 256 });
+    const container = new ContainerBuilder();
+
+    try {
+      const section = new SectionBuilder()
+        .addTextDisplayComponents(
+          new TextDisplayBuilder().setContent('# Elu\nAnti-nuke security bot')
+        )
+        .setThumbnailAccessory(
+          new ThumbnailBuilder().setURL(avatarUrl)
+        );
+      container.addSectionComponents(section);
+    } catch {
+      container.addTextDisplayComponents(
+        new TextDisplayBuilder().setContent('# Elu\nAnti-nuke security bot')
+      );
+    }
+
+    container
       .addSeparatorComponents(
         new SeparatorBuilder()
       )
@@ -166,7 +182,7 @@ client.on(Events.MessageCreate, async (message) => {
 
   if (command === 'help') {
     const embed = {
-      title: 'AntiN8 Commands',
+      title: 'Elu Commands',
       description: '`/antinuke enable` — Enable protection\n`/antinuke disable` — Disable protection\n`/antinuke status` — Show dashboard\n`/antinuke whitelist add @user` — Whitelist user\n`/antinuke whitelist remove @user` — Remove from whitelist\n`/antinuke owner add @user` — Add extra owner\n`/antinuke owner remove @user` — Remove extra owner\n`/antinuke lockdown` — Activate lockdown\n`/antinuke unlock` — Deactivate lockdown\n`&ping` — Check latency',
       color: 0x5865F2,
       footer: { text: 'Zynrax Development' }
@@ -188,28 +204,28 @@ client.on(Events.ClientReady, async () => {
 const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
 
 try {
-  console.log('[AntiN8] Registering slash commands...');
+  console.log('[Elu] Registering slash commands...');
   await rest.put(Routes.applicationCommands(process.env.CLIENT_ID), {
     body: commandDefinitions
   });
-  console.log('[AntiN8] Slash commands registered');
+  console.log('[Elu] Slash commands registered');
 } catch (error) {
-  console.error('[AntiN8] Failed to register slash commands:', error);
+  console.error('[Elu] Failed to register slash commands:', error);
 }
 
-console.log('[AntiN8] Logging in...');
+console.log('[Elu] Logging in...');
 await client.login(process.env.TOKEN);
 
 process.on('unhandledRejection', (error) => {
-  console.error('[AntiN8] Unhandled rejection:', error);
+  console.error('[Elu] Unhandled rejection:', error);
 });
 
 process.on('uncaughtException', (error) => {
-  console.error('[AntiN8] Uncaught exception:', error);
+  console.error('[Elu] Uncaught exception:', error);
 });
 
 const shutdown = async (signal) => {
-  console.log(`[AntiN8] Received ${signal}, shutting down...`);
+  console.log(`[Elu] Received ${signal}, shutting down...`);
   client.destroy();
   process.exit(0);
 };

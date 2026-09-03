@@ -19,7 +19,7 @@ export async function handleEmojiCreate(event, context) {
 
         if (executorId) {
             const action = config.antiEmoji.actions?.punish || 'kick';
-            await punishmentEngine.punish(guildId, executorId, action, 'AntiN8: Emoji spam');
+            await punishmentEngine.punish(guildId, executorId, action, 'Elu: Emoji spam');
         }
 
         await incidentEngine.create(guildId, 'antiEmoji', 'SPAM', executorId, event.emoji.id, 'medium', risk, { emojiName: event.emoji.name }, action);
@@ -50,7 +50,7 @@ export async function handleEmojiDelete(event, context) {
 
         if (executorId) {
             const action = config.antiEmoji.actions?.punish || 'kick';
-            await punishmentEngine.punish(guildId, executorId, action, 'AntiN8: Mass emoji deletion');
+            await punishmentEngine.punish(guildId, executorId, action, 'Elu: Mass emoji deletion');
         }
 
         await incidentEngine.create(guildId, 'antiEmoji', 'MASS_DELETE', executorId, event.emojiId, 'medium', risk, { remaining: guild.emojis?.cache?.size || 0 }, action);
@@ -89,7 +89,7 @@ export async function handleEmojiUpdate(event, context) {
 
         if (executorId) {
             const action = config.antiEmoji.actions?.punish || 'kick';
-            await punishmentEngine.punish(guildId, executorId, action, 'AntiN8: Abusive emoji update');
+            await punishmentEngine.punish(guildId, executorId, action, 'Elu: Abusive emoji update');
         }
 
         await incidentEngine.create(guildId, 'antiEmoji', 'ABUSE', executorId, event.emoji.id, 'low', risk, { changes }, action);
