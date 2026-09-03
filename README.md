@@ -1,37 +1,46 @@
 <div align="center">
 
-<img src="https://discordapp.com/api/guilds/1415328129521815696/widget.png?style=banner4" alt="Zynrax Development" width="600" />
+<a href="https://discord.gg/zynrax">
+<img src="https://discordapp.com/api/guilds/1415328129521815696/widget.png?style=shield" alt="Zynrax Development" />
+</a>
 
-<br><br>
+<br>
 
-# ANTI N8
+# **ANTI N8**
 
 ### Discord Anti-Nuke & Anti-Abuse Security Bot
 
 <br>
 
-![Discord](https://img.shields.io/badge/DISCORD-5865F2?style=for-the-badge&logo=discord&logoColor=white)
+![Online](https://img.shields.io/badge/ONLINE-3BA55C?style=for-the-badge&logo=discord&logoColor=white)
+![Members](https://img.shields.io/discord/members/1415328129521815696?style=for-the-badge&color=5865F2&logo=discord&logoColor=white)
 ![Node.js](https://img.shields.io/badge/NODE.JS-18%2B-339933?style=for-the-badge&logo=node.js&logoColor=white)
 ![SQLite](https://img.shields.io/badge/SQLite-WAL-003B57?style=for-the-badge&logo=sqlite&logoColor=white)
 ![License](https://img.shields.io/badge/LICENSE-MIT-yellow?style=for-the-badge)
+![Version](https://img.shields.io/badge/VERSION-1.0.0-blue?style=for-the-badge)
 
 <br><br>
 
-**Built by Zynrax Development**
+**Production-grade server protection by Zynrax Development**
 
-For support, questions, or just to hang out — join the server
+<br>
 
 [![Join Server](https://img.shields.io/badge/JOIN_SERVER-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/zynrax)
+[![GitHub](https://img.shields.io/badge/GITHUB-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/Nex-Devz/Antinuke-bot)
 
 </div>
 
 ---
 
+<div align="center">
+
 ## What is AntiN8?
+
+</div>
 
 AntiN8 is a production-grade Discord security bot that protects your server from nukes, raids, and abuse. It monitors every Gateway event in real time, applies risk analysis, and enforces configurable punishments — all without polling or external databases.
 
-Gateway first. Memory first. SQLite second. Discord API last.
+**Gateway first. Memory first. SQLite second. Discord API last.**
 
 ---
 
@@ -227,16 +236,18 @@ No Redis. No MongoDB. No TypeScript. No polling.
 
 ---
 
+<div align="center">
+
 ## Support
 
-**Join the Discord server for help, bug reports, or feature requests**
+[![Join Server](https://img.shields.io/badge/JOIN_DISCORD-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/zynrax)
 
-[discord.gg/zynrax](https://discord.gg/zynrax)
+For questions, bug reports, or feature requests — join the server or open an issue.
+
+<br>
 
 ---
 
-<div align="center">
-
-**Made by Zynrax Development**
+**Built with care by Zynrax Development**
 
 </div>
