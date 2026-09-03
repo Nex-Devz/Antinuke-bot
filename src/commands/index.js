@@ -122,10 +122,6 @@ function buildStatusContainer(config, state, enabled) {
     .addSeparatorComponents(new SeparatorBuilder())
     .addTextDisplayComponents(
       new TextDisplayBuilder().setContent(`**Whitelisted:** ${state.whitelist.size} | **Owners:** ${state.extraOwners.size}`)
-    )
-    .addSeparatorComponents(new SeparatorBuilder())
-    .addTextDisplayComponents(
-      new TextDisplayBuilder().setContent('[Zynrax Development](https://discord.gg/zynrax)')
     );
 
   const row = new ActionRowBuilder().addComponents(
