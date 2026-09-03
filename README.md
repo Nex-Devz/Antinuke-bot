@@ -6,11 +6,22 @@ AntiN8 is a comprehensive server protection platform designed for real-world Dis
 
 ---
 
+<p align="center">
+  <a href="https://discord.gg/zynrax">
+    <img src="https://discord.com/api/guilds/1415328129521815696/widget.png" alt="Zynrax Development Support Server" />
+  </a>
+</p>
+
+<p align="center">
+  <b>For any questions, issues, or support — join our Discord server</b><br>
+  <a href="https://discord.gg/zynrax">discord.gg/zynrax</a>
+</p>
+
+---
+
 ## Credits
 
 Built and maintained by Zynrax Development.
-
-Lead Developer: `<@1415328129521815696>`
 
 ---
 
@@ -514,8 +525,6 @@ A single guild operation failure never crashes the entire bot.
 For questions, bug reports, or feature requests:
 
 - Discord Support Server: https://discord.gg/zynrax
-- Server ID: `1415328129521815696`
-- Server Widget: https://discord.com/api/guilds/1415328129521815696/widget.png
 - Open an issue on the repository
 
 When reporting a bug, include:
