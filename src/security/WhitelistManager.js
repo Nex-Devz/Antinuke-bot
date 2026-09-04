@@ -5,9 +5,10 @@ export class WhitelistManager {
   }
 
   isWhitelisted(guildId, userId, action) {
+    if (!userId) return false;
     const raw = this.cache.get(`${guildId}:whitelist`);
     const entries = Array.isArray(raw) ? raw : [];
-    const userLower = userId.toLowerCase();
+    const userLower = String(userId).toLowerCase();
 
     for (const entry of entries) {
       if (entry.targetId.toLowerCase() !== userLower) continue;

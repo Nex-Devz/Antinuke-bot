@@ -53,20 +53,15 @@ import {
 } from "../modules/antisticker/index.js";
 import { handleMessageCreate } from "../modules/antimassmention/index.js";
 import {
-  handlePermissionOverwriteCreate,
-  handlePermissionOverwriteDelete,
-  handlePermissionOverwriteUpdate
-} from "../modules/antipermission/index.js";
-import {
   handleRoleCreate as handleRoleCreateLinkedRole,
   handleRoleUpdate as handleRoleUpdateLinkedRole
 } from "../modules/antilinked-role/index.js";
-import { handleLockdownEvent } from "../modules/emergencylockdown/index.js";
 
 export function registerEvents(client, context) {
   client.on("channelCreate", async (channel) => {
     try {
-      await handleChannelCreate(channel, context);
+      const event = { guild: channel.guild, executorId: null, channel };
+      await handleChannelCreate(event, context);
     } catch (err) {
       console.error("[Gateway]", err);
     }
@@ -74,7 +69,8 @@ export function registerEvents(client, context) {
 
   client.on("channelDelete", async (channel) => {
     try {
-      await handleChannelDelete(channel, context);
+      const event = { guild: channel.guild, executorId: null, channel };
+      await handleChannelDelete(event, context);
     } catch (err) {
       console.error("[Gateway]", err);
     }
@@ -82,7 +78,8 @@ export function registerEvents(client, context) {
 
   client.on("channelUpdate", async (oldChannel, newChannel) => {
     try {
-      await handleChannelUpdate(oldChannel, newChannel, context);
+      const event = { guild: newChannel.guild, executorId: null, channel: newChannel, old: { channel: oldChannel } };
+      await handleChannelUpdate(event, context);
     } catch (err) {
       console.error("[Gateway]", err);
     }
@@ -90,7 +87,9 @@ export function registerEvents(client, context) {
 
   client.on("roleCreate", async (role) => {
     try {
-      await handleRoleCreate(role, context);
+      const event = { guild: role.guild, executorId: null, role };
+      await handleRoleCreate(event, context);
+      await handleRoleCreateLinkedRole(event, context);
     } catch (err) {
       console.error("[Gateway]", err);
     }
@@ -98,7 +97,8 @@ export function registerEvents(client, context) {
 
   client.on("roleDelete", async (role) => {
     try {
-      await handleRoleDelete(role, context);
+      const event = { guild: role.guild, executorId: null, role };
+      await handleRoleDelete(event, context);
     } catch (err) {
       console.error("[Gateway]", err);
     }
@@ -106,8 +106,12 @@ export function registerEvents(client, context) {
 
   client.on("roleUpdate", async (oldRole, newRole) => {
     try {
-      await handleRoleUpdateAntiRole(oldRole, newRole, context);
-      await handleRoleUpdateAntiAdmin(oldRole, newRole, context);
+      const antiRoleEvent = { guild: newRole.guild, executorId: null, role: newRole, old: { role: oldRole } };
+      const antiAdminEvent = { oldRole, newRole };
+      const linkedRoleEvent = { guild: newRole.guild, role: newRole, oldRole };
+      await handleRoleUpdateAntiRole(antiRoleEvent, context);
+      await handleRoleUpdateAntiAdmin(antiAdminEvent, context);
+      await handleRoleUpdateLinkedRole(linkedRoleEvent, context);
     } catch (err) {
       console.error("[Gateway]", err);
     }
@@ -115,8 +119,10 @@ export function registerEvents(client, context) {
 
   client.on("guildMemberAdd", async (member) => {
     try {
-      await handleMemberAddAntiRaid(member, context);
-      await handleMemberAddAntiMemberRole(member, context);
+      const raidEvent = { guild: member.guild, member };
+      const memberRoleEvent = { guild: member.guild, member };
+      await handleMemberAddAntiRaid(raidEvent, context);
+      await handleMemberAddAntiMemberRole(memberRoleEvent, context);
       await handleBotAdd(member, context);
     } catch (err) {
       console.error("[Gateway]", err);
@@ -125,7 +131,8 @@ export function registerEvents(client, context) {
 
   client.on("guildMemberRemove", async (member) => {
     try {
-      await handleKickRemove(member, context);
+      const event = { guild: member.guild, targetId: member.user.id, executorId: null };
+      await handleKickRemove(event, context);
     } catch (err) {
       console.error("[Gateway]", err);
     }
@@ -133,8 +140,9 @@ export function registerEvents(client, context) {
 
   client.on("guildMemberUpdate", async (oldMember, newMember) => {
     try {
-      await handleMemberUpdateAntiMemberRole(oldMember, newMember, context);
-      await handleMemberUpdateAntiAdmin(oldMember, newMember, context);
+      const event = { oldMember, newMember };
+      await handleMemberUpdateAntiMemberRole(event, context);
+      await handleMemberUpdateAntiAdmin(event, context);
     } catch (err) {
       console.error("[Gateway]", err);
     }
@@ -142,7 +150,8 @@ export function registerEvents(client, context) {
 
   client.on("guildBanAdd", async (ban) => {
     try {
-      await handleBanAdd(ban, context);
+      const event = { guild: ban.guild, ban, targetId: ban.user.id, executorId: null };
+      await handleBanAdd(event, context);
     } catch (err) {
       console.error("[Gateway]", err);
     }
@@ -150,8 +159,9 @@ export function registerEvents(client, context) {
 
   client.on("inviteCreate", async (invite) => {
     try {
-      await handleInviteCreate(invite, context);
-      await handleInviteCreateRole(invite, context);
+      const event = { guild: invite.guild, invite };
+      await handleInviteCreate(event, context);
+      await handleInviteCreateRole(event, context);
     } catch (err) {
       console.error("[Gateway]", err);
     }
@@ -159,7 +169,8 @@ export function registerEvents(client, context) {
 
   client.on("inviteDelete", async (invite) => {
     try {
-      await handleInviteDelete(invite, context);
+      const event = { guild: invite.guild, invite, userId: null };
+      await handleInviteDelete(event, context);
     } catch (err) {
       console.error("[Gateway]", err);
     }
@@ -167,7 +178,8 @@ export function registerEvents(client, context) {
 
   client.on("webhooksUpdate", async (channel) => {
     try {
-      await handleWebhookUpdate(channel, context);
+      const event = { guild: channel.guild, executorId: null };
+      await handleWebhookUpdate(event, context);
     } catch (err) {
       console.error("[Gateway]", err);
     }
@@ -190,7 +202,8 @@ export function registerEvents(client, context) {
 
   client.on("integrationUpdate", async (integration) => {
     try {
-      await handleIntegrationUpdate(integration, context);
+      const event = { guild: integration.guild, integration };
+      await handleIntegrationUpdate(event, context);
     } catch (err) {
       console.error("[Gateway]", err);
     }
@@ -230,7 +243,8 @@ export function registerEvents(client, context) {
 
   client.on("guildScheduledEventCreate", async (event) => {
     try {
-      await handleScheduledEventCreate(event, context);
+      const wrapped = { guild: event.guild, scheduledEvent: event, executorId: null };
+      await handleScheduledEventCreate(wrapped, context);
     } catch (err) {
       console.error("[Gateway]", err);
     }
@@ -238,7 +252,8 @@ export function registerEvents(client, context) {
 
   client.on("guildScheduledEventUpdate", async (oldEvent, newEvent) => {
     try {
-      await handleScheduledEventUpdate(oldEvent, newEvent, context);
+      const wrapped = { guild: newEvent.guild, scheduledEvent: newEvent, oldScheduledEvent: oldEvent, executorId: null };
+      await handleScheduledEventUpdate(wrapped, context);
     } catch (err) {
       console.error("[Gateway]", err);
     }
@@ -246,7 +261,8 @@ export function registerEvents(client, context) {
 
   client.on("guildScheduledEventDelete", async (event) => {
     try {
-      await handleScheduledEventDelete(event, context);
+      const wrapped = { guild: event.guild, scheduledEvent: event, executorId: null };
+      await handleScheduledEventDelete(wrapped, context);
     } catch (err) {
       console.error("[Gateway]", err);
     }
@@ -254,7 +270,8 @@ export function registerEvents(client, context) {
 
   client.on("emojiCreate", async (emoji) => {
     try {
-      await handleEmojiCreate(emoji, context);
+      const event = { guild: emoji.guild, emoji, executorId: null };
+      await handleEmojiCreate(event, context);
     } catch (err) {
       console.error("[Gateway]", err);
     }
@@ -262,7 +279,8 @@ export function registerEvents(client, context) {
 
   client.on("emojiDelete", async (emoji) => {
     try {
-      await handleEmojiDelete(emoji, context);
+      const event = { guild: emoji.guild, emojiId: emoji.id, emoji, executorId: null };
+      await handleEmojiDelete(event, context);
     } catch (err) {
       console.error("[Gateway]", err);
     }
@@ -270,7 +288,8 @@ export function registerEvents(client, context) {
 
   client.on("emojiUpdate", async (oldEmoji, newEmoji) => {
     try {
-      await handleEmojiUpdate(oldEmoji, newEmoji, context);
+      const event = { guild: newEmoji.guild, emoji: newEmoji, old: { emoji: oldEmoji }, executorId: null };
+      await handleEmojiUpdate(event, context);
     } catch (err) {
       console.error("[Gateway]", err);
     }
@@ -278,7 +297,8 @@ export function registerEvents(client, context) {
 
   client.on("stickerCreate", async (sticker) => {
     try {
-      await handleStickerCreate(sticker, context);
+      const event = { guild: sticker.guild, sticker, executorId: null };
+      await handleStickerCreate(event, context);
     } catch (err) {
       console.error("[Gateway]", err);
     }
@@ -286,7 +306,8 @@ export function registerEvents(client, context) {
 
   client.on("stickerDelete", async (sticker) => {
     try {
-      await handleStickerDelete(sticker, context);
+      const event = { guild: sticker.guild, stickerId: sticker.id, sticker, executorId: null };
+      await handleStickerDelete(event, context);
     } catch (err) {
       console.error("[Gateway]", err);
     }
@@ -294,7 +315,8 @@ export function registerEvents(client, context) {
 
   client.on("stickerUpdate", async (oldSticker, newSticker) => {
     try {
-      await handleStickerUpdate(oldSticker, newSticker, context);
+      const event = { guild: newSticker.guild, sticker: newSticker, old: { sticker: oldSticker }, executorId: null };
+      await handleStickerUpdate(event, context);
     } catch (err) {
       console.error("[Gateway]", err);
     }
@@ -303,26 +325,6 @@ export function registerEvents(client, context) {
   client.on("messageCreate", async (message) => {
     try {
       await handleMessageCreate(message, context);
-    } catch (err) {
-      console.error("[Gateway]", err);
-    }
-  });
-
-  client.on("channelUpdate", async (oldChannel, newChannel) => {
-    try {
-      const oldOverwrites = oldChannel.permissionOverwrites?.cache || new Map();
-      const newOverwrites = newChannel.permissionOverwrites?.cache || new Map();
-      if (oldOverwrites.size !== newOverwrites.size) {
-        await handlePermissionOverwriteCreate(newChannel, context);
-      }
-    } catch (err) {
-      console.error("[Gateway]", err);
-    }
-  });
-
-  client.on("roleUpdate", async (oldRole, newRole) => {
-    try {
-      await handleRoleUpdateLinkedRole(oldRole, newRole, context);
     } catch (err) {
       console.error("[Gateway]", err);
     }
