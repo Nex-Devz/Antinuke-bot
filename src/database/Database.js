@@ -378,6 +378,20 @@ export class LunaDatabase {
     }
   }
 
+  getConfig(guildId) {
+    const flat = this.getGuildConfig(guildId);
+    if (!flat) return null;
+    const modules = {};
+    for (const [key, value] of Object.entries(flat)) {
+      if (typeof value === 'object' && value !== null && 'enabled' in value) {
+        let name = key.toLowerCase();
+        if (name === 'antirole') name = 'antir\u00f4le';
+        modules[name] = value;
+      }
+    }
+    return { guildId, modules };
+  }
+
   async initGuildConfig(guildId) {
     const { createDefaultConfig } = await import("../config/defaults.js");
     const config = createDefaultConfig(guildId);
