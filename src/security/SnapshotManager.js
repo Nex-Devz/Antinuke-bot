@@ -3,6 +3,7 @@ export class SnapshotManager {
     this.client = client;
     this.cache = cache;
     this.database = database;
+    this.snapshotCache = new Map();
   }
 
   async buildSnapshot(guild) {
@@ -321,7 +322,7 @@ export class SnapshotManager {
 
   async #storeSnapshot(guildId, key, snapshot) {
     const cacheKey = `${guildId}:snapshots:${key}`;
-    this.cache.set(cacheKey, snapshot);
+    this.snapshotCache.set(cacheKey, snapshot);
 
     try {
       await this.database?.upsert?.('snapshots', {
@@ -336,7 +337,7 @@ export class SnapshotManager {
 
   async getSnapshot(guildId, key) {
     const cacheKey = `${guildId}:snapshots:${key}`;
-    let snapshot = this.cache.get(cacheKey);
+    let snapshot = this.snapshotCache.get(cacheKey);
 
     if (snapshot) return snapshot;
 
@@ -344,7 +345,7 @@ export class SnapshotManager {
       const row = await this.database?.get?.('snapshots', { guildId, snapshotKey: key });
       if (row?.data) {
         snapshot = typeof row.data === 'string' ? JSON.parse(row.data) : row.data;
-        this.cache.set(cacheKey, snapshot);
+        this.snapshotCache.set(cacheKey, snapshot);
         return snapshot;
       }
     } catch (err) {
