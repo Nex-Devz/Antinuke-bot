@@ -408,6 +408,32 @@ client.on(Events.MessageCreate, async (message) => {
     });
     return reply;
   }
+
+  if (command === 'automod') {
+    const container = new ContainerBuilder()
+      .addTextDisplayComponents(
+        new TextDisplayBuilder().setContent('# AutoMod\nPolicy-based content filtering')
+      )
+      .addSeparatorComponents(new SeparatorBuilder())
+      .addTextDisplayComponents(
+        new TextDisplayBuilder().setContent('Type `/automod` to open the interactive dashboard, or use these subcommands:')
+      )
+      .addSeparatorComponents(new SeparatorBuilder())
+      .addTextDisplayComponents(
+        new TextDisplayBuilder().setContent(
+          '`/automod overview` — Server AutoMod status and settings\n' +
+          '`/automod modules` — Configure each filtering module (Keyword, Spam, Mention Spam, Profanity)\n' +
+          '`/automod rules` — Manage native Discord AutoMod rules\n' +
+          '`/automod stats` — Violation statistics\n' +
+          '`/automod logs` — Recent AutoMod violation log'
+        )
+      )
+      .addSeparatorComponents(new SeparatorBuilder())
+      .addTextDisplayComponents(
+        new TextDisplayBuilder().setContent('[Zynrax Development](https://discord.gg/zynrax)')
+      );
+    return message.reply({ components: [container], flags: 32768 });
+  }
 });
 
 client.on(Events.ClientReady, async () => {

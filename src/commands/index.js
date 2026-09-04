@@ -1,4 +1,6 @@
 import { SlashCommandBuilder, PermissionFlagsBits, ActionRowBuilder, ButtonBuilder, ButtonStyle, ContainerBuilder, TextDisplayBuilder, SeparatorBuilder, SectionBuilder, ThumbnailBuilder, ModalBuilder, UserSelectMenuBuilder, LabelBuilder, RadioGroupBuilder, RadioGroupOptionBuilder, CheckboxGroupBuilder, CheckboxGroupOptionBuilder } from 'discord.js';
+import { getEmoji } from '../utils/emoji.js';
+
 
 const antinukeCommand = new SlashCommandBuilder()
   .setName('antinuke')
@@ -119,11 +121,14 @@ function buildStatusContainer(config, state, enabled) {
   const client = state?.client;
   const avatarUrl = client?.user?.displayAvatarURL({ size: 256 }) || '';
 
+  const tick = getEmoji('floovi_tick');
+  const cross = getEmoji('floovi_cross');
+
   const modules = Object.entries(config || {})
     .filter(([k, v]) => typeof v === 'object' && v !== null && 'enabled' in v);
 
   const moduleList = modules
-    .map(([k, v]) => `> ${v.enabled ? '**ON**' : '**OFF**'} \u2022 ${formatModuleName(k)}`)
+    .map(([k, v]) => `> ${v.enabled ? (tick || '\u2705') : (cross || '\u274C')} **${formatModuleName(k)}**`)
     .join('\n') || '> No modules configured';
 
   const status = enabled ? '**ACTIVE**' : '**DISABLED**';
@@ -175,8 +180,7 @@ function buildStatusContainer(config, state, enabled) {
     new ButtonBuilder()
       .setCustomId('antinuke_setup')
       .setLabel('Setup Wizard')
-      .setStyle(ButtonStyle.Secondary)
-      .setEmoji('\u2699\uFE0F'),
+      .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId('antinuke_status')
       .setLabel('Refresh')
@@ -488,11 +492,11 @@ async function handleModalSubmit(interaction, context) {
         config = database.getGuildConfig(guildId);
       }
 
-      const allModules = Object.keys(config || {}).filter(k =>
-        typeof config[k] === 'object' && config[k] !== null && 'enabled' in config[k]
-      );
-      for (const k of allModules) {
-        config[k].enabled = selected.includes(k);
+      const wizardValues = ['antiChannel','antiRole','antiPermission','antiWebhook','antiBan','antiKick','antiBot','antiRaid','antiMassMention'];
+      for (const k of wizardValues) {
+        if (config[k] && typeof config[k] === 'object' && 'enabled' in config[k]) {
+          config[k].enabled = selected.includes(k);
+        }
       }
 
       const levelThresholds = {
@@ -510,7 +514,6 @@ async function handleModalSubmit(interaction, context) {
       const container = buildStatusContainer(config, state, selected.length > 0);
 
       return interaction.reply({
-        content: `Setup complete. Level: **${level}** | Enabled: **${selected.length}** modules`,
         components: [container],
         flags: 32768,
         ephemeral: true

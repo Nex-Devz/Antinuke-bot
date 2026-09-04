@@ -220,7 +220,6 @@ export async function handleAutoModModal(interaction, context) {
     }
     await automodManager.updateRuleConfig(guildId, type, { mode });
     return interaction.reply({
-      content: `AutoMod rule **${type}** configured with action: **${mode}**.`,
       components: [buildConfigureContainer(automodManager, guildId, type)],
       flags: 32768,
       ephemeral: true
@@ -243,7 +242,6 @@ export async function handleAutoModModal(interaction, context) {
     cfg.escalationEnabled = read("automod_esc", "on") === "on";
     automodManager.saveGuildDB(guildId, cfg);
     return interaction.reply({
-      content: "AutoMod settings updated.",
       components: [buildSettingsContainer(automodManager, guildId)],
       flags: 32768,
       ephemeral: true
@@ -265,7 +263,6 @@ export async function handleAutoModModal(interaction, context) {
       console.error("[AutoMod] Exclusion modal error:", err.message);
     }
     return interaction.reply({
-      content: "Exclusions updated.",
       components: [buildExclusionsContainer(automodManager, guildId, type)],
       flags: 32768,
       ephemeral: true
@@ -289,7 +286,6 @@ export async function handleAutoModModal(interaction, context) {
       }
     }
     return interaction.reply({
-      content: "Settings updated.",
       components: [buildSettingsContainer(automodManager, guildId)],
       flags: 32768,
       ephemeral: true

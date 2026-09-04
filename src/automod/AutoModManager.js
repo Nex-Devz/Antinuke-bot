@@ -178,6 +178,8 @@ export class AutoModManager {
     const map = this.getRules(guild.id);
     rule.state = "loading";
     rule.discordRuleId = rule.discordRuleId || null;
+    rule.actionConfig = rule.actionConfig || this.defaultActionConfig();
+    rule.actionConfig.alertChannel = this.getGuildDB(guild.id).logChannelId;
     map.set(type, rule);
     this.persistRule(guild.id, rule);
 
@@ -216,7 +218,7 @@ export class AutoModManager {
     };
 
     const cfg = rule.actionConfig || this.defaultActionConfig();
-    payload.actions = this.buildActions(cfg);
+    payload.actions = this.buildActions(cfg, cfg.alertChannel);
 
     switch (rule.type) {
       case "keyword":
@@ -252,15 +254,16 @@ export class AutoModManager {
     return payload;
   }
 
-  buildActions(cfg) {
-    const actions = [
-      {
+  buildActions(cfg, alertChannel) {
+    const actions = [];
+    if (alertChannel) {
+      actions.push({
         type: AutoModerationActionType.SendAlertMessage,
         metadata: {
-          channel: cfg.alertChannel || null
+          channel: alertChannel
         }
-      }
-    ];
+      });
+    }
 
     if (cfg.mode === "timeout") {
       actions.push({
@@ -286,7 +289,7 @@ export class AutoModManager {
     await guild.autoModerationRules.edit(existing, {
       name: rule.name,
       triggerMetadata: this.buildRulePayload(rule).triggerMetadata,
-      actions: this.buildActions(rule.actionConfig),
+      actions: this.buildActions(rule.actionConfig, this.getGuildDB(guild.id).logChannelId),
       enabled: rule.enabled,
       exemptRoles: rule.exemptRoles || [],
       exemptChannels: rule.exemptChannels || []
