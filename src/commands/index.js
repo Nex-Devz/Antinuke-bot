@@ -175,14 +175,20 @@ function buildStatusContainer(config, state, enabled) {
 
   const moduleSelect = new StringSelectMenuBuilder()
     .setCustomId('module_toggle')
-    .setPlaceholder('Toggle a module...')
+    .setPlaceholder('Select a module to toggle...')
     .addOptions(
-      modules.slice(0, 25).map(([k, v]) => ({
-        label: formatModuleName(k),
-        description: `Currently ${v.enabled ? 'ON' : 'OFF'}`,
-        value: k,
-        emoji: v.enabled ? '\u2705' : '\u274C'
-      }))
+      modules.slice(0, 25).map(([k, v]) => {
+        const tag = v.enabled ? (tick || '\u2705') : (cross || '\u274C');
+        const emojiMatch = tag.match(/^<a?:(\w+):(\d+)>$/);
+        return {
+          label: `${v.enabled ? 'ON' : 'OFF'} \u2022 ${formatModuleName(k)}`,
+          description: 'Select to toggle this module',
+          value: k,
+          emoji: emojiMatch
+            ? { id: emojiMatch[2], name: emojiMatch[1] }
+            : tag
+        };
+      })
     );
 
   const row = new ActionRowBuilder().addComponents(
