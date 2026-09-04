@@ -259,7 +259,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 client.on(Events.MessageCreate, async (message) => {
   if (message.author.bot) return;
 
-  const mentionRegex = new RegExp(`^<@!?$\\{client.user.id}>\\s*$`);
+  const mentionRegex = new RegExp(`^<@!?${client.user.id}>\\s*$`);
   if (mentionRegex.test(message.content.trim())) {
     const avatarUrl = client.user.displayAvatarURL({ size: 256 });
     const container = new ContainerBuilder();
@@ -284,13 +284,7 @@ client.on(Events.MessageCreate, async (message) => {
         new SeparatorBuilder()
       )
       .addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(
-          `**Quick Start**\n\n` +
-          `${cmdMention('antinuke')} \u2014 Open security panel\n` +
-          `${cmdMention('lockdown')} \u2014 Activate lockdown\n` +
-          `\`&help\` \u2014 Show all commands\n` +
-          `\`&ping\` \u2014 Check bot latency`
-        )
+        new TextDisplayBuilder().setContent('**Prefix**\n`&help` — Show commands\n`&ping` — Check latency')
       )
       .addSeparatorComponents(
         new SeparatorBuilder()
@@ -313,44 +307,39 @@ client.on(Events.MessageCreate, async (message) => {
     const avatarUrl = client.user.displayAvatarURL({ size: 256 });
     const container = new ContainerBuilder();
 
-    try {
-      const section = new SectionBuilder()
-        .addTextDisplayComponents(
-          new TextDisplayBuilder().setContent(`# \u2728 Luna\n> Anti-nuke & anti-abuse security`)
-        )
-        .setThumbnailAccessory(
-          new ThumbnailBuilder().setURL(avatarUrl)
-        );
-      container.addSectionComponents(section);
-    } catch {
-      container.addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(`# \u2728 Luna\n> Anti-nuke & anti-abuse security`)
+    const section = new SectionBuilder()
+      .addTextDisplayComponents(
+        new TextDisplayBuilder().setContent('# Luna Commands\nYour cute anime security guardian')
+      )
+      .setThumbnailAccessory(
+        new ThumbnailBuilder().setURL(avatarUrl)
       );
-    }
+    container.addSectionComponents(section);
 
     container
       .addSeparatorComponents(new SeparatorBuilder())
       .addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(
-          `**Slash Commands**\n\n` +
-          `${cmdMention('antinuke')} \u2014 Open security panel\n` +
-          `${cmdMention('whitelist', 'add')} \u2014 Whitelist a user\n` +
-          `${cmdMention('whitelist', 'remove')} \u2014 Remove from whitelist\n` +
-          `${cmdMention('whitelist', 'list')} \u2014 View whitelisted users\n` +
-          `${cmdMention('coowner', 'add')} \u2014 Add extra owner\n` +
-          `${cmdMention('coowner', 'remove')} \u2014 Remove extra owner\n` +
-          `${cmdMention('coowner', 'list')} \u2014 View extra owners\n` +
-          `${cmdMention('lockdown')} \u2014 Activate lockdown\n` +
-          `${cmdMention('unlock')} \u2014 Deactivate lockdown\n\n` +
-          `**Prefix Commands**\n\n` +
-          `\`&help\` \u2014 Show this menu\n` +
-          `\`&ping\` \u2014 Check bot latency`
-        )
+        new TextDisplayBuilder().setContent('Luna is a powerful anti-nuke bot designed to protect your Discord server from malicious attacks, raiders, and abuse. With 20+ security modules running 24/7, your server stays safe from channel deletes, role wipes, mass bans, webhook spam, and more.\n\nSelect a command from the dropdown below to see detailed information about each feature.')
       )
       .addSeparatorComponents(new SeparatorBuilder())
       .addTextDisplayComponents(
         new TextDisplayBuilder().setContent('[Zynrax Development](https://discord.gg/zynrax)')
       );
+
+    const select = new StringSelectMenuBuilder()
+      .setCustomId('help_select')
+      .setPlaceholder('Select a command...')
+      .addOptions(
+        { label: '/antinuke', description: 'Open security panel', value: 'antinuke' },
+        { label: '/whitelist', description: 'Manage whitelisted users', value: 'whitelist' },
+        { label: '/coowner', description: 'Manage extra owners', value: 'coowner' },
+        { label: '/lockdown', description: 'Activate lockdown mode', value: 'lockdown' },
+        { label: '/unlock', description: 'Deactivate lockdown', value: 'unlock' },
+        { label: '&ping', description: 'Check bot latency', value: 'ping' }
+      );
+
+    const selectRow = new ActionRowBuilder().addComponents(select);
+    container.addActionRowComponents(selectRow);
 
     return message.reply({ components: [container], flags: 32768 });
   }
