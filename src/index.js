@@ -82,6 +82,12 @@ registerEvents(client, context);
 
 const PREFIX = '&';
 
+function cmdMention(name, subcommand) {
+  const id = commandMap.get(name);
+  if (!id) return `/${name}${subcommand ? ` ${subcommand}` : ''}`;
+  return subcommand ? `</${name} ${subcommand}:${id}>` : `</${name}:${id}>`;
+}
+
 client.on(Events.InteractionCreate, async (interaction) => {
   try {
     if (interaction.isChatInputCommand()) {
@@ -192,12 +198,12 @@ client.on(Events.InteractionCreate, async (interaction) => {
       const value = interaction.values[0];
 
       const descriptions = {
-        antinuke: '**/antinuke** — Opens the security panel\n\nThe main control panel for Luna. Shows all 20 protection modules with their current status (ON/OFF). You can Enable All modules at once or Disable All. The panel auto-refreshes when you make changes.\n\nModules include: Channel, Role, Permission, Webhook, Emoji, Sticker, Ban, Kick, Member Role, Admin Escalation, Bot, Integration, Auto Mod, Scheduled Event, Invite, Invite Role, Linked Role, Raid, Mass Mention, and Emergency Lockdown.',
-        whitelist: '**/whitelist** — Manage whitelisted users\n\n`/whitelist add @user` — Add a user to the whitelist\n`/whitelist remove @user` — Remove a user from whitelist\n`/whitelist list` — View all whitelisted users\n\nWhitelisted users are completely immune to all protection actions. They can perform any action without triggering alerts or punishments. Use this for trusted moderators and staff members.',
-        coowner: '**/coowner** — Manage extra owners\n\n`/coowner add @user` — Add an extra owner\n`/coowner remove @user` — Remove an extra owner\n`/coowner list` — View all extra owners\n\nExtra owners have the same level of permissions as the server owner. They can manage all security settings, whitelist users, and control lockdown. Use this for your most trusted administrators.',
-        lockdown: '**/lockdown** — Activate lockdown mode\n\nImmediately disables all protection modules and puts the server on high alert. During lockdown, no protection actions are taken but all suspicious activity is logged.\n\nThis is useful when you need to perform maintenance or when the bot is giving false positives. Only administrators can activate or deactivate lockdown.',
-        unlock: '**/unlock** — Deactivate lockdown\n\nReturns all protection modules to their previous state. The server goes back to normal operation with all protections active.\n\nMake sure to review any logged incidents after deactivating lockdown to ensure nothing was missed during the lockdown period.',
-        ping: '**&ping** — Check bot latency\n\nShows the current message latency (how long it takes for the bot to respond) and the Discord API response time.\n\nGood latency values:\n- Under 100ms: Excellent\n- 100-200ms: Good\n- 200-400ms: Fair\n- Over 400ms: Poor'
+        antinuke: `**${cmdMention('antinuke')}** \u2014 Opens the security panel\n\nThe main control panel for Luna. Shows all 20 protection modules with their current status (ON/OFF). You can Enable All modules at once or Disable All. The panel auto-refreshes when you make changes.\n\nModules include: Channel, Role, Permission, Webhook, Emoji, Sticker, Ban, Kick, Member Role, Admin Escalation, Bot, Integration, Auto Mod, Scheduled Event, Invite, Invite Role, Linked Role, Raid, Mass Mention, and Emergency Lockdown.`,
+        whitelist: `**${cmdMention('whitelist', 'add')}** \u2014 Add a user to the whitelist\n**${cmdMention('whitelist', 'remove')}** \u2014 Remove a user from whitelist\n**${cmdMention('whitelist', 'list')}** \u2014 View all whitelisted users\n\nWhitelisted users are completely immune to all protection actions. They can perform any action without triggering alerts or punishments. Use this for trusted moderators and staff members.`,
+        coowner: `**${cmdMention('coowner', 'add')}** \u2014 Add an extra owner\n**${cmdMention('coowner', 'remove')}** \u2014 Remove an extra owner\n**${cmdMention('coowner', 'list')}** \u2014 View all extra owners\n\nExtra owners have the same level of permissions as the server owner. They can manage all security settings, whitelist users, and control lockdown. Use this for your most trusted administrators.`,
+        lockdown: `**${cmdMention('lockdown')}** \u2014 Activate lockdown mode\n\nImmediately disables all protection modules and puts the server on high alert. During lockdown, no protection actions are taken but all suspicious activity is logged.\n\nThis is useful when you need to perform maintenance or when the bot is giving false positives. Only administrators can activate or deactivate lockdown.`,
+        unlock: `**${cmdMention('unlock')}** \u2014 Deactivate lockdown\n\nReturns all protection modules to their previous state. The server goes back to normal operation with all protections active.\n\nMake sure to review any logged incidents after deactivating lockdown to ensure nothing was missed during the lockdown period.`,
+        ping: '**&ping** \u2014 Check bot latency\n\nShows the current message latency (how long it takes for the bot to respond) and the Discord API response time.\n\nGood latency values:\n- Under 100ms: Excellent\n- 100-200ms: Good\n- 200-400ms: Fair\n- Over 400ms: Poor'
       };
 
       const container = new ContainerBuilder()
@@ -278,7 +284,13 @@ client.on(Events.MessageCreate, async (message) => {
         new SeparatorBuilder()
       )
       .addTextDisplayComponents(
-        new TextDisplayBuilder().setContent('**Prefix**\n`&help` — Show commands\n`&ping` — Check latency')
+        new TextDisplayBuilder().setContent(
+          `**Quick Start**\n\n` +
+          `${cmdMention('antinuke')} \u2014 Open security panel\n` +
+          `${cmdMention('lockdown')} \u2014 Activate lockdown\n` +
+          `\`&help\` \u2014 Show all commands\n` +
+          `\`&ping\` \u2014 Check bot latency`
+        )
       )
       .addSeparatorComponents(
         new SeparatorBuilder()
@@ -301,39 +313,44 @@ client.on(Events.MessageCreate, async (message) => {
     const avatarUrl = client.user.displayAvatarURL({ size: 256 });
     const container = new ContainerBuilder();
 
-    const section = new SectionBuilder()
-      .addTextDisplayComponents(
-        new TextDisplayBuilder().setContent('# Luna Commands\nYour cute anime security guardian')
-      )
-      .setThumbnailAccessory(
-        new ThumbnailBuilder().setURL(avatarUrl)
+    try {
+      const section = new SectionBuilder()
+        .addTextDisplayComponents(
+          new TextDisplayBuilder().setContent(`# \u2728 Luna\n> Anti-nuke & anti-abuse security`)
+        )
+        .setThumbnailAccessory(
+          new ThumbnailBuilder().setURL(avatarUrl)
+        );
+      container.addSectionComponents(section);
+    } catch {
+      container.addTextDisplayComponents(
+        new TextDisplayBuilder().setContent(`# \u2728 Luna\n> Anti-nuke & anti-abuse security`)
       );
-    container.addSectionComponents(section);
+    }
 
     container
       .addSeparatorComponents(new SeparatorBuilder())
       .addTextDisplayComponents(
-        new TextDisplayBuilder().setContent('Luna is a powerful anti-nuke bot designed to protect your Discord server from malicious attacks, raiders, and abuse. With 20+ security modules running 24/7, your server stays safe from channel deletes, role wipes, mass bans, webhook spam, and more.\n\nSelect a command from the dropdown below to see detailed information about each feature.')
+        new TextDisplayBuilder().setContent(
+          `**Slash Commands**\n\n` +
+          `${cmdMention('antinuke')} \u2014 Open security panel\n` +
+          `${cmdMention('whitelist', 'add')} \u2014 Whitelist a user\n` +
+          `${cmdMention('whitelist', 'remove')} \u2014 Remove from whitelist\n` +
+          `${cmdMention('whitelist', 'list')} \u2014 View whitelisted users\n` +
+          `${cmdMention('coowner', 'add')} \u2014 Add extra owner\n` +
+          `${cmdMention('coowner', 'remove')} \u2014 Remove extra owner\n` +
+          `${cmdMention('coowner', 'list')} \u2014 View extra owners\n` +
+          `${cmdMention('lockdown')} \u2014 Activate lockdown\n` +
+          `${cmdMention('unlock')} \u2014 Deactivate lockdown\n\n` +
+          `**Prefix Commands**\n\n` +
+          `\`&help\` \u2014 Show this menu\n` +
+          `\`&ping\` \u2014 Check bot latency`
+        )
       )
       .addSeparatorComponents(new SeparatorBuilder())
       .addTextDisplayComponents(
         new TextDisplayBuilder().setContent('[Zynrax Development](https://discord.gg/zynrax)')
       );
-
-    const select = new StringSelectMenuBuilder()
-      .setCustomId('help_select')
-      .setPlaceholder('Select a command...')
-      .addOptions(
-        { label: '/antinuke', description: 'Open security panel', value: 'antinuke' },
-        { label: '/whitelist', description: 'Manage whitelisted users', value: 'whitelist' },
-        { label: '/coowner', description: 'Manage extra owners', value: 'coowner' },
-        { label: '/lockdown', description: 'Activate lockdown mode', value: 'lockdown' },
-        { label: '/unlock', description: 'Deactivate lockdown', value: 'unlock' },
-        { label: '&ping', description: 'Check bot latency', value: 'ping' }
-      );
-
-    const selectRow = new ActionRowBuilder().addComponents(select);
-    container.addActionRowComponents(selectRow);
 
     return message.reply({ components: [container], flags: 32768 });
   }
@@ -388,12 +405,20 @@ client.on(Events.ClientReady, async () => {
 
 const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
 
+const commandMap = new Map();
+
 try {
   console.log('[Luna] Registering slash commands...');
   await rest.put(Routes.applicationCommands(process.env.CLIENT_ID), {
     body: commandDefinitions
   });
   console.log('[Luna] Slash commands registered');
+
+  const registered = await rest.get(Routes.applicationCommands(process.env.CLIENT_ID));
+  for (const cmd of registered) {
+    commandMap.set(cmd.name, cmd.id);
+  }
+  console.log(`[Luna] Command IDs mapped: ${[...commandMap.entries()].map(([n, id]) => `${n}:${id}`).join(', ')}`);
 } catch (error) {
   console.error('[Luna] Failed to register slash commands:', error);
 }

@@ -1,53 +1,22 @@
 <div align="center">
 
-<table>
-<tr>
-<td align="center" width="9999" bgcolor="#1a1b26">
+# AntiN8
 
-<img src="https://img.shields.io/badge/ANTI_N8-0D1117?style=for-the-badge&labelColor=0D1117&color=5865F2" alt="AntiN8" />
+### Discord Anti-Nuke & Anti-Abuse Security Bot
 
-<br><br>
+![Node.js](https://img.shields.io/badge/Node.js-18%2B-339933?style=flat-square&logo=node.js&logoColor=white)
+![Discord.js](https://img.shields.io/badge/Discord.js-14-5865F2?style=flat-square&logo=discord&logoColor=white)
+![License](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)
 
-# **ANTI N8**
-
-<br>
-
-### `> Discord Anti-Nuke & Anti-Abuse Security Bot`
-
-<br>
-
-<img src="https://img.shields.io/badge/ONLINE-3BA55C?style=flat-square&logo=discord&logoColor=white" />
-<img src="https://img.shields.io/discord/members/1415328129521815696?style=flat-square&color=5865F2&logo=discord&logoColor=white" />
-<img src="https://img.shields.io/badge/VERSION-1.0.0-blue?style=flat-square" />
-<img src="https://img.shields.io/badge/NODE.JS-18%2B-339933?style=flat-square&logo=node.js&logoColor=white" />
-<img src="https://img.shields.io/badge/DISCORD.JS-14-5865F2?style=flat-square&logo=discord&logoColor=white" />
-<img src="https://img.shields.io/badge/LICENSE-MIT-yellow?style=flat-square" />
-
-<br><br>
-
-`Built by Zynrax Development`
-
-<br>
-
-<img src="https://img.shields.io/badge/JOIN_SERVER-5865F2?style=for-the-badge&logo=discord&logoColor=white&link=https://discord.gg/zynrax" />
-
-</td>
-</tr>
-</table>
+**Gateway first. Memory first. SQLite second. Discord API last.**
 
 </div>
 
 ---
 
-<div align="center">
-
 ## What is AntiN8?
 
-</div>
-
-AntiN8 is a production-grade Discord security bot that protects your server from nukes, raids, and abuse. It monitors every Gateway event in real time, applies risk analysis, and enforces configurable punishments — all without polling or external databases.
-
-**Gateway first. Memory first. SQLite second. Discord API last.**
+AntiN8 is a production-grade Discord security bot that protects your server from nukes, raids, and abuse. It monitors every Gateway event in real time, applies risk analysis, and enforces configurable punishments -- all without polling or external databases.
 
 ---
 
@@ -56,8 +25,8 @@ AntiN8 is a production-grade Discord security bot that protects your server from
 <details>
 <summary><b>Channel Protection</b></summary>
 
-- Anti Channel Nuke — mass create, delete, permission overwrite abuse
-- Anti Permission Nuke — dangerous grants on protected channels
+- Anti Channel Nuke -- mass create, delete, permission overwrite abuse
+- Anti Permission Nuke -- dangerous grants on protected channels
 - Snapshot restore for deleted channels
 
 </details>
@@ -65,10 +34,10 @@ AntiN8 is a production-grade Discord security bot that protects your server from
 <details>
 <summary><b>Role Protection</b></summary>
 
-- Anti Role Nuke — mass create, delete, permission escalation
-- Anti Admin Escalation — detects Administrator permission addition
-- Anti Member Role Abuse — rapid role assignment/removal
-- Anti Linked Role — Discord Linked Role protection
+- Anti Role Nuke -- mass create, delete, permission escalation
+- Anti Admin Escalation -- detects Administrator permission addition
+- Anti Member Role Abuse -- rapid role assignment/removal
+- Anti Linked Role -- Discord Linked Role protection
 - Snapshot restore for deleted roles
 
 </details>
@@ -76,25 +45,25 @@ AntiN8 is a production-grade Discord security bot that protects your server from
 <details>
 <summary><b>Abuse Prevention</b></summary>
 
-- Anti Ban — multi-window mass ban detection (5/10s, 10/30s, 20/60s)
-- Anti Kick — same architecture for kicks
-- Anti Raid — member join velocity tracking
-- Anti Mass Mention — @everyone/@here flood detection
-- Anti Bot Add — unauthorized bot blocking
-- Anti Webhook Nuke — webhook creation/deletion tracking
+- Anti Ban -- multi-window mass ban detection (5/10s, 10/30s, 20/60s)
+- Anti Kick -- same architecture for kicks
+- Anti Raid -- member join velocity tracking
+- Anti Mass Mention -- @everyone/@here flood detection
+- Anti Bot Add -- unauthorized bot blocking
+- Anti Webhook Nuke -- webhook creation/deletion tracking
 
 </details>
 
 <details>
 <summary><b>Resource Protection</b></summary>
 
-- Anti Invite Nuke — invite spam detection
-- Anti Invite Role — dangerous role payloads in invites
-- Anti Emoji/Sticker Nuke — creation/deletion spam
-- Anti Integration Abuse — integration tampering
-- Anti AutoMod Abuse — AutoMod rule protection
-- Anti Scheduled Event Abuse — event spam
-- Emergency Lockdown — server-wide lockdown mode
+- Anti Invite Nuke -- invite spam detection
+- Anti Invite Role -- dangerous role payloads in invites
+- Anti Emoji/Sticker Nuke -- creation/deletion spam
+- Anti Integration Abuse -- integration tampering
+- Anti AutoMod Abuse -- AutoMod rule protection
+- Anti Scheduled Event Abuse -- event spam
+- Emergency Lockdown -- server-wide lockdown mode
 
 </details>
 
@@ -122,7 +91,7 @@ AntiN8 is a production-grade Discord security bot that protects your server from
 
 ## Permission Risk Engine
 
-Every role is scored by its actual Discord permission flags — never by name.
+Every role is scored by its actual Discord permission flags -- never by name.
 
 ```
 Administrator       100  ████████████████████
@@ -161,45 +130,29 @@ All punishments verify: bot permissions, role hierarchy, target manageability, n
 
 ## Commands
 
-```
-/security setup              Initialize security
-/security status             Show dashboard
-/security config             View configuration
-/security lockdown           Activate lockdown
-/security unlock             Deactivate lockdown
+**Slash Commands**
 
-/security whitelist add      Whitelist user/role
-/security whitelist remove   Remove from whitelist
-/security whitelist list     List entries
+| Command | Description |
+|---------|-------------|
+| `/antinuke` | Open security panel |
+| `/whitelist add` | Whitelist a user |
+| `/whitelist remove` | Remove from whitelist |
+| `/whitelist list` | View whitelisted users |
+| `/coowner add` | Add extra owner |
+| `/coowner remove` | Remove extra owner |
+| `/coowner list` | View extra owners |
+| `/lockdown` | Activate lockdown mode |
+| `/unlock` | Deactivate lockdown |
 
-/security owner add          Add extra owner
-/security owner remove       Remove extra owner
-/security owner list         List owners
+**Aliases:** `/wl` and `/trust` work as aliases for `/whitelist`
 
-/security protection enable  Enable module
-/security protection disable Disable module
-/security protection toggle  Toggle module
+**Prefix Commands**
 
-/security thresholds ban     Set ban threshold
-/security thresholds kick    Set kick threshold
-/security thresholds view    View all thresholds
-
-/security punishments set    Set punishment
-/security punishments view   View punishments
-
-/security incidents          View incidents
-/security logs               View logs
-
-/security protected role add       Protect role
-/security protected role remove    Unprotect role
-/security protected role list      List protected roles
-/security protected channel add    Protect channel
-/security protected channel remove Unprotect channel
-/security protected channel list   List protected channels
-/security protected webhook add    Protect webhook
-/security protected webhook remove Unprotect webhook
-/security protected webhook list   List protected webhooks
-```
+| Command | Description |
+|---------|-------------|
+| `&help` | Show help menu |
+| `&ping` | Check bot latency |
+| `&antinuke` | Open security panel |
 
 ---
 
@@ -223,7 +176,7 @@ CLIENT_ID=your_client_id
 npm start
 ```
 
-Then in Discord: `/security setup`
+Then in Discord: `/antinuke` to open the security panel.
 
 ---
 
@@ -241,24 +194,14 @@ No Redis. No MongoDB. No TypeScript. No polling.
 
 ---
 
-<table>
-<tr>
-<td align="center" width="9999" bgcolor="#1a1b26">
-
-<br>
+<div align="center">
 
 ### Support
 
-<img src="https://img.shields.io/badge/JOIN_DISCORD-5865F2?style=for-the-badge&logo=discord&logoColor=white" />
+For questions, bug reports, or feature requests -- join the server or open an issue.
 
-For questions, bug reports, or feature requests — join the server or open an issue.
+[Join Discord](https://discord.gg/zynrax)
 
-<br>
+**Built by Zynrax Development**
 
-`Built with care by Zynrax Development`
-
-<br>
-
-</td>
-</tr>
-</table>
+</div>
