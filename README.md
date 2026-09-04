@@ -16,7 +16,7 @@
 
 ## What is AntiN8?
 
-AntiN8 is a production-grade Discord security bot that protects your server from nukes, raids, and abuse. It monitors every Gateway event in real time, applies risk analysis, and enforces configurable punishments -- all without polling or external databases.
+AntiN8 is a production-grade Discord security bot that protects your server from nukes, raids, and abuse. It monitors every Gateway event in real time, applies risk analysis, and enforces configurable punishments -- all without polling or external databases. It also ships a full **AutoMod** toolkit that provisions native Discord AutoMod rules from an in-chat dashboard.
 
 ---
 
@@ -84,8 +84,17 @@ AntiN8 is a production-grade Discord security bot that protects your server from
 | Layer | What | Where |
 |-------|------|-------|
 | Hot Path | Rate limits, dedup, snapshots, audit cache | JavaScript Map/Set |
-| Cold Path | Config, whitelist, owners, incidents | SQLite (WAL mode) |
-| External | Audit logs, executor resolution | Discord REST API |
+| Cold Path | Config, whitelist, owners, incidents, AutoMod rules/violations/stats | SQLite (WAL mode) |
+| External | Audit logs, executor resolution, AutoMod rule API | Discord REST API |
+
+**AutoMod tables**
+
+| Table | Purpose |
+|-------|---------|
+| `guild_automod` | Per-guild AutoMod settings (log channel, notifications, DM, escalation) |
+| `automod_rules` | Luna's rule definitions + their state and Discord rule ID |
+| `automod_violations` | Every enforcement event (user, rule, channel, action, timestamp) |
+| `automod_stats` | Daily counters for blocked / timeout / alert actions |
 
 ---
 
@@ -143,6 +152,11 @@ All punishments verify: bot permissions, role hierarchy, target manageability, n
 | `/coowner list` | View extra owners |
 | `/lockdown` | Activate lockdown mode |
 | `/unlock` | Deactivate lockdown |
+| `/automod overview` | AutoMod dashboard overview |
+| `/automod modules` | Manage AutoMod protection modules |
+| `/automod rules` | List created AutoMod rules |
+| `/automod stats` | AutoMod enforcement statistics |
+| `/automod logs` | Recent AutoMod enforcement logs |
 
 **Aliases:** `/wl` and `/trust` work as aliases for `/whitelist`
 
@@ -150,9 +164,43 @@ All punishments verify: bot permissions, role hierarchy, target manageability, n
 
 | Command | Description |
 |---------|-------------|
-| `&help` | Show help menu |
+| `&help` | Show categorised help menu (Security / AutoMod / General) |
 | `&ping` | Check bot latency |
 | `&antinuke` | Open security panel |
+
+---
+
+## AutoMod
+
+Luna also manages native **Discord AutoMod** rules from a Component V2 dashboard opened with `/automod`. No need to touch Discord's built-in AutoMod settings -- everything is driven from the `/automod` panel.
+
+**Modules**
+
+| Module | Trigger | Default |
+|--------|---------|---------|
+| Keyword | Blocked word filtering | block |
+| Spam | Message flooding detection | block |
+| Mention Spam | Mass-mention / raid mentions | block |
+| Profanity | Native preset (profanity, sexual content, slurs) | block |
+
+**Per-rule options**
+
+- Action mode: **Block**, **Timeout**, or **Alert only**
+- Exempt **roles** and **channels** (so admins / staff / support channels aren't affected)
+- Custom timeout duration and mention limit
+
+**Dashboard pages**
+
+Overview, Modules, Configure, Rules, Exclusions, Statistics, Settings, Logs.
+
+**Settings**
+
+- **Log channel** -- where AutoMod alerts and logs are posted
+- **Notifications** -- toggle moderator alerts when a rule triggers
+- **DM offenders** -- send the offending user a direct message
+- **Escalation** -- automatically timeout users with 5+ violations inside 10 minutes
+
+AutoMod rules are created on Discord when you hit **Sync Rules to Discord** in the Rules page. The bot requires the **Manage Guild** permission to create native AutoMod rules.
 
 ---
 
@@ -176,7 +224,7 @@ CLIENT_ID=your_client_id
 npm start
 ```
 
-Then in Discord: `/antinuke` to open the security panel.
+Then in Discord: `/antinuke` to open the security panel, or `/automod` to manage AutoMod rules.
 
 ---
 
@@ -189,6 +237,7 @@ Then in Discord: `/antinuke` to open the security panel.
 | Database | SQLite (better-sqlite3) |
 | Cache | Native Map/Set |
 | UI | Components V2 |
+| AutoMod | Native Discord AutoMod rule API |
 
 No Redis. No MongoDB. No TypeScript. No polling.
 
