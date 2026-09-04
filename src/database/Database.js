@@ -138,6 +138,83 @@ export class LunaDatabase {
       getInviteHistory: this.#db.prepare(
         "SELECT * FROM invite_history WHERE guildId = ? ORDER BY createdAt DESC LIMIT ?"
       ),
+
+      getAutoModConfig: this.#db.prepare(
+        "SELECT * FROM guild_automod WHERE guildId = ?"
+      ),
+      upsertAutoModConfig: this.#db.prepare(`
+        INSERT INTO guild_automod (
+          guildId, enabled, logChannelId, notificationsEnabled,
+          notificationDuration, dmEnabled, escalationEnabled, updatedAt
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(guildId) DO UPDATE SET
+          enabled = excluded.enabled,
+          logChannelId = excluded.logChannelId,
+          notificationsEnabled = excluded.notificationsEnabled,
+          notificationDuration = excluded.notificationDuration,
+          dmEnabled = excluded.dmEnabled,
+          escalationEnabled = excluded.escalationEnabled,
+          updatedAt = excluded.updatedAt
+      `),
+
+      getAutoModRules: this.#db.prepare(
+        "SELECT * FROM automod_rules WHERE guildId = ? ORDER BY id ASC"
+      ),
+      getAutoModRuleByDiscordId: this.#db.prepare(
+        "SELECT * FROM automod_rules WHERE guildId = ? AND discordRuleId = ?"
+      ),
+      getAutoModRuleByType: this.#db.prepare(
+        "SELECT * FROM automod_rules WHERE guildId = ? AND type = ?"
+      ),
+      upsertAutoModRule: this.#db.prepare(`
+        INSERT INTO automod_rules (
+          guildId, discordRuleId, type, name, enabled, state,
+          actionConfig, exemptRoles, exemptChannels, createdAt, updatedAt
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+          discordRuleId = excluded.discordRuleId,
+          name = excluded.name,
+          enabled = excluded.enabled,
+          state = excluded.state,
+          actionConfig = excluded.actionConfig,
+          exemptRoles = excluded.exemptRoles,
+          exemptChannels = excluded.exemptChannels,
+          updatedAt = excluded.updatedAt
+      `),
+      deleteAutoModRule: this.#db.prepare(
+        "DELETE FROM automod_rules WHERE guildId = ? AND type = ?"
+      ),
+      setAutoModRuleState: this.#db.prepare(
+        "UPDATE automod_rules SET state = ?, updatedAt = ? WHERE guildId = ? AND type = ?"
+      ),
+
+      addAutoModViolation: this.#db.prepare(
+        "INSERT INTO automod_violations (guildId, userId, ruleId, ruleName, channelId, action, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)"
+      ),
+      getAutoModViolations: this.#db.prepare(
+        "SELECT * FROM automod_violations WHERE guildId = ? ORDER BY createdAt DESC LIMIT ?"
+      ),
+      countAutoModViolations: this.#db.prepare(
+        "SELECT COUNT(*) as count FROM automod_violations WHERE guildId = ? AND userId = ? AND createdAt >= ?"
+      ),
+
+      upsertAutoModStat: this.#db.prepare(`
+        INSERT INTO automod_stats (guildId, date, blocked, warnings, timeouts, alerts)
+        VALUES (?, ?, ?, ?, ?, ?)
+        ON CONFLICT(guildId, date) DO UPDATE SET
+          blocked = excluded.blocked,
+          warnings = excluded.warnings,
+          timeouts = excluded.timeouts,
+          alerts = excluded.alerts
+      `),
+      getAutoModStat: this.#db.prepare(
+        "SELECT * FROM automod_stats WHERE guildId = ? AND date = ?"
+      ),
+      sumAutoModStatRange: this.#db.prepare(
+        "SELECT COALESCE(SUM(blocked),0) as blocked, COALESCE(SUM(warnings),0) as warnings, COALESCE(SUM(timeouts),0) as timeouts, COALESCE(SUM(alerts),0) as alerts FROM automod_stats WHERE guildId = ? AND date >= ?"
+      ),
     };
   }
 
@@ -366,6 +443,106 @@ export class LunaDatabase {
 
   getInviteHistory(guildId, limit = 50) {
     return this.#statements.getInviteHistory.all(guildId, limit);
+  }
+
+  getAutoModConfig(guildId) {
+    return this.#statements.getAutoModConfig.get(guildId);
+  }
+
+  upsertAutoModConfig(guildId, cfg) {
+    const now = new Date().toISOString();
+    return this.#statements.upsertAutoModConfig.run(
+      guildId,
+      cfg.enabled ? 1 : 0,
+      cfg.logChannelId || null,
+      cfg.notificationsEnabled ? 1 : 0,
+      cfg.notificationDuration || 5000,
+      cfg.dmEnabled ? 1 : 0,
+      cfg.escalationEnabled ? 1 : 0,
+      now
+    );
+  }
+
+  getAutoModRules(guildId) {
+    return this.#statements.getAutoModRules.all(guildId);
+  }
+
+  getAutoModRuleByDiscordId(guildId, discordRuleId) {
+    return this.#statements.getAutoModRuleByDiscordId.get(guildId, discordRuleId);
+  }
+
+  getAutoModRuleByType(guildId, type) {
+    return this.#statements.getAutoModRuleByType.get(guildId, type);
+  }
+
+  upsertAutoModRule(guildId, rule) {
+    const now = new Date().toISOString();
+    return this.#statements.upsertAutoModRule.run(
+      guildId,
+      rule.discordRuleId || null,
+      rule.type,
+      rule.name,
+      rule.enabled ? 1 : 0,
+      rule.state || 'PENDING',
+      rule.actionConfig ? JSON.stringify(rule.actionConfig) : null,
+      rule.exemptRoles ? JSON.stringify(rule.exemptRoles) : null,
+      rule.exemptChannels ? JSON.stringify(rule.exemptChannels) : null,
+      now,
+      now
+    );
+  }
+
+  setAutoModRuleState(guildId, type, state) {
+    return this.#statements.setAutoModRuleState.run(
+      state,
+      new Date().toISOString(),
+      guildId,
+      type
+    );
+  }
+
+  deleteAutoModRule(guildId, type) {
+    return this.#statements.deleteAutoModRule.run(guildId, type);
+  }
+
+  addAutoModViolation(guildId, userId, ruleId, ruleName, channelId, action, createdAt) {
+    return this.#statements.addAutoModViolation.run(
+      guildId,
+      userId,
+      ruleId,
+      ruleName,
+      channelId,
+      action,
+      createdAt
+    );
+  }
+
+  getAutoModViolations(guildId, limit = 50) {
+    return this.#statements.getAutoModViolations.all(guildId, limit);
+  }
+
+  countAutoModViolations(guildId, userId, sinceIso) {
+    const row = this.#statements.countAutoModViolations.get(guildId, userId, sinceIso);
+    return row ? row.count : 0;
+  }
+
+  upsertAutoModStat(guildId, date, counts) {
+    return this.#statements.upsertAutoModStat.run(
+      guildId,
+      date,
+      counts.blocked || 0,
+      counts.warnings || 0,
+      counts.timeouts || 0,
+      counts.alerts || 0
+    );
+  }
+
+  getAutoModStat(guildId, date) {
+    return this.#statements.getAutoModStat.get(guildId, date);
+  }
+
+  sumAutoModStatRange(guildId, sinceIso) {
+    return this.#statements.sumAutoModStatRange.get(guildId, sinceIso);
   }
 
   getGuildConfig(guildId) {

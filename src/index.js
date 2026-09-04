@@ -30,9 +30,11 @@ import { SnapshotManager } from './security/SnapshotManager.js';
 import { AuditCorrelator } from './security/AuditCorrelator.js';
 import { WhitelistManager } from './security/WhitelistManager.js';
 import { OwnerManager } from './security/OwnerManager.js';
+import { AutoModManager } from './automod/AutoModManager.js';
+import { automodCommand, handleAutoModCommand, handleAutoModButton, handleAutoModModal, handleAutoModSelect } from './automod/handler.js';
 
 import { registerEvents } from './events/index.js';
-import { commandDefinitions, handleCommand, buildStatusContainer } from './commands/index.js';
+import { commandDefinitions, handleCommand, handleModalSubmit, buildStatusContainer, buildAntinukeSetupModal } from './commands/index.js';
 import { onReady } from './events/ready.js';
 
 console.log('[Luna] Starting up...');
@@ -65,6 +67,7 @@ const snapshotManager = new SnapshotManager(client, guildCache, database);
 const auditCorrelator = new AuditCorrelator(client, guildCache);
 const whitelistManager = new WhitelistManager(guildCache, database);
 const ownerManager = new OwnerManager(guildCache, database);
+const automodManager = new AutoModManager(client, database, guildCache);
 
 const context = {
   client,
@@ -75,7 +78,8 @@ const context = {
   snapshotManager,
   auditCorrelator,
   whitelistManager,
-  ownerManager
+  ownerManager,
+  automodManager
 };
 
 registerEvents(client, context);
@@ -91,10 +95,21 @@ function cmdMention(name, subcommand) {
 client.on(Events.InteractionCreate, async (interaction) => {
   try {
     if (interaction.isChatInputCommand()) {
-      await handleCommand(interaction, context);
+      if (!(await handleAutoModCommand(interaction, context))) {
+        await handleCommand(interaction, context);
+      }
+    }
+
+    if (interaction.isModalSubmit()) {
+      if (!(await handleAutoModModal(interaction, context))) {
+        await handleModalSubmit(interaction, context);
+      }
     }
 
     if (interaction.isButton()) {
+      if (await handleAutoModButton(interaction, context)) {
+        return;
+      }
       const { database, cache } = context;
       const guildId = interaction.guildId;
 
@@ -184,6 +199,13 @@ client.on(Events.InteractionCreate, async (interaction) => {
         return interaction.editReply({ components: [container] });
       }
 
+      if (interaction.customId === 'antinuke_setup') {
+        if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+          return interaction.reply({ content: 'Administrator permission required.', ephemeral: true });
+        }
+        return interaction.showModal(buildAntinukeSetupModal());
+      }
+
       if (interaction.customId === 'antinuke_status') {
         const config = database.getGuildConfig(guildId);
         const state = cache.get(guildId);
@@ -194,21 +216,24 @@ client.on(Events.InteractionCreate, async (interaction) => {
       }
     }
 
-    if (interaction.isStringSelectMenu() && interaction.customId === 'help_select') {
+    if (interaction.isStringSelectMenu() && interaction.customId.startsWith('am_')) {
+      if (await handleAutoModSelect(interaction, context)) {
+        return;
+      }
+    }
+
+    if (interaction.isStringSelectMenu() && interaction.customId === 'help_cat_select') {
       const value = interaction.values[0];
 
-      const descriptions = {
-        antinuke: `**${cmdMention('antinuke')}** \u2014 Opens the security panel\n\nThe main control panel for Luna. Shows all 20 protection modules with their current status (ON/OFF). You can Enable All modules at once or Disable All. The panel auto-refreshes when you make changes.\n\nModules include: Channel, Role, Permission, Webhook, Emoji, Sticker, Ban, Kick, Member Role, Admin Escalation, Bot, Integration, Auto Mod, Scheduled Event, Invite, Invite Role, Linked Role, Raid, Mass Mention, and Emergency Lockdown.`,
-        whitelist: `**${cmdMention('whitelist', 'add')}** \u2014 Add a user to the whitelist\n**${cmdMention('whitelist', 'remove')}** \u2014 Remove a user from whitelist\n**${cmdMention('whitelist', 'list')}** \u2014 View all whitelisted users\n\nWhitelisted users are completely immune to all protection actions. They can perform any action without triggering alerts or punishments. Use this for trusted moderators and staff members.`,
-        coowner: `**${cmdMention('coowner', 'add')}** \u2014 Add an extra owner\n**${cmdMention('coowner', 'remove')}** \u2014 Remove an extra owner\n**${cmdMention('coowner', 'list')}** \u2014 View all extra owners\n\nExtra owners have the same level of permissions as the server owner. They can manage all security settings, whitelist users, and control lockdown. Use this for your most trusted administrators.`,
-        lockdown: `**${cmdMention('lockdown')}** \u2014 Activate lockdown mode\n\nImmediately disables all protection modules and puts the server on high alert. During lockdown, no protection actions are taken but all suspicious activity is logged.\n\nThis is useful when you need to perform maintenance or when the bot is giving false positives. Only administrators can activate or deactivate lockdown.`,
-        unlock: `**${cmdMention('unlock')}** \u2014 Deactivate lockdown\n\nReturns all protection modules to their previous state. The server goes back to normal operation with all protections active.\n\nMake sure to review any logged incidents after deactivating lockdown to ensure nothing was missed during the lockdown period.`,
-        ping: '**&ping** \u2014 Check bot latency\n\nShows the current message latency (how long it takes for the bot to respond) and the Discord API response time.\n\nGood latency values:\n- Under 100ms: Excellent\n- 100-200ms: Good\n- 200-400ms: Fair\n- Over 400ms: Poor'
+      const cats = {
+        security: `**Security**\n\n${cmdMention('antinuke')} — Open the security panel\n${cmdMention('whitelist', 'add')} / ${cmdMention('whitelist', 'remove')} / ${cmdMention('whitelist', 'list')} — Whitelist management\n${cmdMention('coowner', 'add')} / ${cmdMention('coowner', 'remove')} / ${cmdMention('coowner', 'list')} — Extra owners\n${cmdMention('lockdown')} — Activate lockdown\n${cmdMention('unlock')} — Deactivate lockdown\n\nAnti-nuke and protection modules that stop channel deletes, role wipes, mass bans, webhook spam and more.`,
+        automod: `**AutoMod**\n\n${cmdMention('automod', 'overview')} — Dashboard overview\n${cmdMention('automod', 'modules')} — Manage protection modules\n${cmdMention('automod', 'rules')} — List created rules\n${cmdMention('automod', 'stats')} — Enforcement statistics\n${cmdMention('automod', 'logs')} — Recent enforcement logs\n\nNative Discord AutoMod rules for keyword, spam, mention and profanity filtering — configured entirely from the dashboard.`,
+        general: `**General**\n\n&ping — Check bot latency\n\nUtility and info commands.`
       };
 
       const container = new ContainerBuilder()
         .addTextDisplayComponents(
-          new TextDisplayBuilder().setContent(`# Luna\n${descriptions[value] || 'Unknown command'}`)
+          new TextDisplayBuilder().setContent(`# Luna\n${cats[value] || cats.security}`)
         )
         .addSeparatorComponents(new SeparatorBuilder())
         .addTextDisplayComponents(
@@ -319,7 +344,7 @@ client.on(Events.MessageCreate, async (message) => {
     container
       .addSeparatorComponents(new SeparatorBuilder())
       .addTextDisplayComponents(
-        new TextDisplayBuilder().setContent('Luna is a powerful anti-nuke bot designed to protect your Discord server from malicious attacks, raiders, and abuse. With 20+ security modules running 24/7, your server stays safe from channel deletes, role wipes, mass bans, webhook spam, and more.\n\nSelect a command from the dropdown below to see detailed information about each feature.')
+        new TextDisplayBuilder().setContent('Luna is a powerful anti-nuke bot designed to protect your Discord server from malicious attacks, raiders, and abuse.\n\nSelect a **category** below to browse commands.')
       )
       .addSeparatorComponents(new SeparatorBuilder())
       .addTextDisplayComponents(
@@ -327,15 +352,12 @@ client.on(Events.MessageCreate, async (message) => {
       );
 
     const select = new StringSelectMenuBuilder()
-      .setCustomId('help_select')
-      .setPlaceholder('Select a command...')
+      .setCustomId('help_cat_select')
+      .setPlaceholder('Select a category...')
       .addOptions(
-        { label: '/antinuke', description: 'Open security panel', value: 'antinuke' },
-        { label: '/whitelist', description: 'Manage whitelisted users', value: 'whitelist' },
-        { label: '/coowner', description: 'Manage extra owners', value: 'coowner' },
-        { label: '/lockdown', description: 'Activate lockdown mode', value: 'lockdown' },
-        { label: '/unlock', description: 'Deactivate lockdown', value: 'unlock' },
-        { label: '&ping', description: 'Check bot latency', value: 'ping' }
+        { label: 'Security', description: 'Anti-nuke and protection modules', value: 'security' },
+        { label: 'AutoMod', description: 'Content moderation and AutoMod rules', value: 'automod' },
+        { label: 'General', description: 'Utility and info commands', value: 'general' }
       );
 
     const selectRow = new ActionRowBuilder().addComponents(select);
@@ -399,7 +421,7 @@ const commandMap = new Map();
 try {
   console.log('[Luna] Registering slash commands...');
   await rest.put(Routes.applicationCommands(process.env.CLIENT_ID), {
-    body: commandDefinitions
+    body: [...commandDefinitions, automodCommand.toJSON()]
   });
   console.log('[Luna] Slash commands registered');
 

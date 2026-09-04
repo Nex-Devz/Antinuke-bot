@@ -220,6 +220,14 @@ export function registerEvents(client, context) {
     }
   });
 
+  client.on("autoModerationActionExecution", async (execution) => {
+    try {
+      await context.automodManager?.handleExecution(execution, context);
+    } catch (err) {
+      console.error("[Gateway]", err);
+    }
+  });
+
   client.on("guildScheduledEventCreate", async (event) => {
     try {
       await handleScheduledEventCreate(event, context);
