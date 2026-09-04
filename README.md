@@ -6,11 +6,8 @@
 
 <img src="https://cdn.jsdelivr.net/gh/Nex-Devz/Antinuke-bot@main/assets/lune-logo.png" alt="Lune Logo" width="128" height="128">
 
-<div>
-<img src="https://raw.githubusercontent.com/discord/discord-api-docs/main/assets/discord-logo.svg" alt="Discord" width="48" height="48" style="margin-right: 12px;">
-<img src="https://raw.githubusercontent.com/nodejs/nodejs.org/main/public/static/images/logo-light.svg" alt="Node.js" width="48" height="48">
-</div>
-
+![Discord.js](https://img.shields.io/badge/Discord.js-14-5865F2?style=flat-square&logo=discord&logoColor=white)
+![Node.js](https://img.shields.io/badge/Node.js-18%2B-339933?style=flat-square&logo=node.js&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)
 
 **Gateway first. Memory first. SQLite second. Discord API last.**
