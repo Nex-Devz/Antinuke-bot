@@ -48,7 +48,8 @@ export class PunishmentEngine {
         return { success: false, error: check.error };
       }
 
-      switch (action) {
+      const act = String(action).toUpperCase().replace(/ /g, '_');
+      switch (act) {
         case 'BAN':
           return await this.#ban(guild, member, reason);
         case 'KICK':

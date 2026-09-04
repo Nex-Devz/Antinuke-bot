@@ -10,25 +10,19 @@ export async function handleStickerCreate(event, context) {
   const executorId = event.executorId || await auditCorrelator.resolveExecutor(guild, 'STICKER_CREATE', event.sticker.id);
   console.log(`[Security] Sticker created: ${event.sticker.name} in ${guild.name} by ${executorId || 'unknown'}`);
 
-  if (executorId) {
-    if (await whitelistManager.isWhitelisted(guildId, executorId)) return;
-    if (await ownerManager.isExtraOwner(guildId, executorId)) return;
+  if (!executorId) return;
+  if (await whitelistManager.isWhitelisted(guildId, executorId)) return;
+  if (await ownerManager.isExtraOwner(guildId, executorId)) return;
 
-    const risk = 70;
-    const actions = config.modules.antisticker.actions || {};
-    await snapshotManager.takeStickerSnapshot(guildId, event.sticker.id);
+  const actions = config.modules.antisticker.actions || {};
+  const reason = 'Luna: Unauthorized sticker creation';
 
-    if (actions.restore) {
-      await event.sticker.delete('Luna: Unauthorized sticker creation').catch(e => console.log(`[Security] Failed to delete sticker: ${e.message}`));
-      console.log(`[Security] Deleted unauthorized sticker: ${event.sticker.name}`);
-    }
-
-    if (actions.punish) {
-      await punishmentEngine.punish(guildId, executorId, actions.punish, `Unauthorized sticker creation: ${event.sticker.name}`);
-    }
-
-    await incidentEngine.create(guildId, 'antisticker', 'sticker_create', executorId, event.sticker.id, 'critical', risk, { sticker: event.sticker.toJSON() }, 'delete_and_punish');
-  }
+  await Promise.all([
+    snapshotManager.takeStickerSnapshot(guildId, event.sticker.id),
+    actions.restore ? event.sticker.delete(reason).catch(() => null) : null,
+    actions.punish ? punishmentEngine.punish(guildId, executorId, actions.punish, reason) : null,
+    incidentEngine.create(guildId, 'antisticker', 'sticker_create', executorId, event.sticker.id, 'critical', 70, { sticker: event.sticker.name }, 'delete_and_punish')
+  ]);
 }
 
 export async function handleStickerDelete(event, context) {
@@ -43,27 +37,30 @@ export async function handleStickerDelete(event, context) {
   const executorId = event.executorId || await auditCorrelator.resolveExecutor(guild, 'STICKER_DELETE', event.stickerId);
   console.log(`[Security] Sticker deleted: ${event.sticker?.name || event.stickerId} in ${guild.name} by ${executorId || 'unknown'}`);
 
-  if (executorId) {
-    if (await whitelistManager.isWhitelisted(guildId, executorId)) return;
-    if (await ownerManager.isExtraOwner(guildId, executorId)) return;
+  if (!executorId) return;
+  if (await whitelistManager.isWhitelisted(guildId, executorId)) return;
+  if (await ownerManager.isExtraOwner(guildId, executorId)) return;
 
-    const risk = 70;
-    const actions = config.modules.antisticker.actions || {};
+  const actions = config.modules.antisticker.actions || {};
+  const reason = 'Luna: Unauthorized sticker deletion';
 
-    if (actions.restore) {
-      const snapshot = await snapshotManager.getSnapshot(guildId, `sticker:${event.stickerId}`);
-      if (snapshot) {
-        await snapshotManager.restoreSticker(guildId, snapshot).catch(e => console.log(`[Security] Failed to restore sticker: ${e.message}`));
-        console.log(`[Security] Restored sticker: ${snapshot.name}`);
-      }
-    }
+  const tasks = [
+    actions.punish ? punishmentEngine.punish(guildId, executorId, actions.punish, reason) : null,
+    incidentEngine.create(guildId, 'antisticker', 'sticker_delete', executorId, event.stickerId, 'critical', 70, { stickerName: event.sticker?.name }, 'restore_and_punish')
+  ];
 
-    if (actions.punish) {
-      await punishmentEngine.punish(guildId, executorId, actions.punish, `Unauthorized sticker deletion: ${event.sticker?.name || event.stickerId}`);
-    }
-
-    await incidentEngine.create(guildId, 'antisticker', 'sticker_delete', executorId, event.stickerId, 'critical', risk, { stickerName: event.sticker?.name }, 'restore_and_punish');
+  if (actions.restore) {
+    tasks.push(
+      snapshotManager.getSnapshot(guildId, `sticker:${event.stickerId}`).then(async (snapshot) => {
+        if (snapshot) {
+          await snapshotManager.restoreSticker(guildId, snapshot).catch(() => null);
+          console.log(`[Security] Restored sticker: ${snapshot.name}`);
+        }
+      })
+    );
   }
+
+  await Promise.all(tasks);
 }
 
 export async function handleStickerUpdate(event, context) {
@@ -78,16 +75,14 @@ export async function handleStickerUpdate(event, context) {
   const executorId = event.executorId || await auditCorrelator.resolveExecutor(guild, 'STICKER_UPDATE', event.sticker.id);
   console.log(`[Security] Sticker updated: ${event.sticker.name} in ${guild.name} by ${executorId || 'unknown'}`);
 
-  if (executorId) {
-    if (await whitelistManager.isWhitelisted(guildId, executorId)) return;
-    if (await ownerManager.isExtraOwner(guildId, executorId)) return;
+  if (!executorId) return;
+  if (await whitelistManager.isWhitelisted(guildId, executorId)) return;
+  if (await ownerManager.isExtraOwner(guildId, executorId)) return;
 
-    const risk = 50;
-    const actions = config.modules.antisticker.actions || {};
-    if (actions.punish) {
-      await punishmentEngine.punish(guildId, executorId, actions.punish, `Unauthorized sticker update: ${event.sticker.name}`);
-    }
+  const actions = config.modules.antisticker.actions || {};
 
-    await incidentEngine.create(guildId, 'antisticker', 'sticker_update', executorId, event.sticker.id, 'medium', risk, { stickerName: event.sticker.name }, 'log_only');
-  }
+  await Promise.all([
+    actions.punish ? punishmentEngine.punish(guildId, executorId, actions.punish, 'Luna: Unauthorized sticker update') : null,
+    incidentEngine.create(guildId, 'antisticker', 'sticker_update', executorId, event.sticker.id, 'medium', 50, { stickerName: event.sticker.name }, 'log_only')
+  ]);
 }
