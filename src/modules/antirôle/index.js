@@ -1,52 +1,58 @@
-import { getRoleRisk, isDangerousRole, isAdminRole, getRiskLevel, getPermissionChanges } from '../../security/PermissionAnalyzer.js';
+import { getRoleRisk, getPermissionChanges } from '../../security/PermissionAnalyzer.js';
 
 export async function handleRoleCreate(event, context) {
   const { client, cache, database, incidentEngine, punishmentEngine, snapshotManager, auditCorrelator, whitelistManager, ownerManager } = context;
   const guild = event.guild;
-  const guildId = guild?.id;
-  if (!guildId) return;
+  if (!guild) return;
+  const guildId = guild.id;
 
   const config = await database.getConfig(guildId);
   if (!config?.modules?.antirôle?.enabled) return;
 
-  try {
-    if (await whitelistManager.isWhitelisted(guildId, event.executorId)) return;
-    if (await ownerManager.isExtraOwner(guildId, event.executorId)) return;
+  const executorId = await auditCorrelator.resolveExecutor(guild, 'ROLE_CREATE', event.role.id);
+  console.log(`[Security] Role created: ${event.role.name} in ${guild.name} by ${executorId || 'unknown'}`);
 
+  if (executorId) {
+    if (await whitelistManager.isWhitelisted(guildId, executorId)) return;
+    if (await ownerManager.isExtraOwner(guildId, executorId)) return;
+
+    const risk = 70;
+    const actions = config.modules.antirôle.actions || {};
     await snapshotManager.captureRole(guildId, event.role);
 
-    const recentCreates = await cache.getRoleCreates(guildId);
-    const risk = calculateRoleCreateRisk(event, recentCreates);
-
-    if (risk >= 70) {
-      await event.role.delete().catch(() => null);
-      await punishmentEngine.punish(guildId, event.executorId, 'role_create_spam', risk);
-      await incidentEngine.create(guildId, 'antirôle', 'role_create', event.executorId, event.role.id, 'critical', risk, { recentCreates, role: event.role.toJSON() }, 'delete_and_punish');
-    } else if (risk >= 30) {
-      await incidentEngine.create(guildId, 'antirôle', 'role_create', event.executorId, event.role.id, 'warning', risk, { recentCreates, role: event.role.toJSON() }, 'log_only');
+    if (actions.restore) {
+      await event.role.delete('Luna: Unauthorized role creation').catch(e => console.log(`[Security] Failed to delete role: ${e.message}`));
+      console.log(`[Security] Deleted unauthorized role: ${event.role.name}`);
     }
-  } catch (err) {
-    console.error(`[Security] Error in handleRoleCreate for guild ${guildId}:`, err);
+
+    if (actions.punish) {
+      await punishmentEngine.punish(guildId, executorId, actions.punish, `Unauthorized role creation: ${event.role.name}`);
+    }
+
+    await incidentEngine.create(guildId, 'antirôle', 'role_create', executorId, event.role.id, 'critical', risk, { role: event.role.toJSON() }, 'delete_and_punish');
   }
 }
 
 export async function handleRoleDelete(event, context) {
   const { client, cache, database, incidentEngine, punishmentEngine, snapshotManager, auditCorrelator, whitelistManager, ownerManager } = context;
   const guild = event.guild;
-  const guildId = guild?.id;
-  if (!guildId) return;
+  if (!guild) return;
+  const guildId = guild.id;
 
   const config = await database.getConfig(guildId);
   if (!config?.modules?.antirôle?.enabled) return;
 
-  try {
-    if (await whitelistManager.isWhitelisted(guildId, event.executorId)) return;
-    if (await ownerManager.isExtraOwner(guildId, event.executorId)) return;
+  const executorId = await auditCorrelator.resolveExecutor(guild, 'ROLE_DELETE', event.role.id);
+  console.log(`[Security] Role deleted: ${event.role.name} in ${guild.name} by ${executorId || 'unknown'}`);
 
-    const recentDeletes = await cache.getRoleDeletes(guildId);
-    const risk = calculateRoleDeleteRisk(event, recentDeletes);
+  if (executorId) {
+    if (await whitelistManager.isWhitelisted(guildId, executorId)) return;
+    if (await ownerManager.isExtraOwner(guildId, executorId)) return;
 
-    if (risk >= 70) {
+    const risk = 80;
+    const actions = config.modules.antirôle.actions || {};
+
+    if (actions.restore) {
       const snapshot = await snapshotManager.getRoleSnapshot(guildId, event.role.id);
       if (snapshot) {
         const restored = await guild.roles.create({
@@ -56,80 +62,62 @@ export async function handleRoleDelete(event, context) {
           mentionable: snapshot.mentionable,
           permissions: snapshot.permissions,
           reason: 'Luna: Restoring deleted role'
-        }).catch(() => null);
+        }).catch(e => console.log(`[Security] Failed to restore role: ${e.message}`));
         if (restored && snapshot.position) await restored.setPosition(snapshot.position).catch(() => null);
+        console.log(`[Security] Restored role: ${restored?.name || snapshot.name}`);
       }
-      await punishmentEngine.punish(guildId, event.executorId, 'role_delete_spam', risk);
-      await incidentEngine.create(guildId, 'antirôle', 'role_delete', event.executorId, event.role.id, 'critical', risk, { recentDeletes, role: event.role.toJSON() }, 'restore_and_punish');
-    } else if (risk >= 30) {
-      await incidentEngine.create(guildId, 'antirôle', 'role_delete', event.executorId, event.role.id, 'warning', risk, { recentDeletes, role: event.role.toJSON() }, 'log_only');
     }
-  } catch (err) {
-    console.error(`[Security] Error in handleRoleDelete for guild ${guildId}:`, err);
+
+    if (actions.punish) {
+      await punishmentEngine.punish(guildId, executorId, actions.punish, `Unauthorized role deletion: ${event.role.name}`);
+    }
+
+    await incidentEngine.create(guildId, 'antirôle', 'role_delete', executorId, event.role.id, 'critical', risk, { role: event.role.name }, 'restore_and_punish');
   }
 }
 
 export async function handleRoleUpdate(event, context) {
   const { client, cache, database, incidentEngine, punishmentEngine, snapshotManager, auditCorrelator, whitelistManager, ownerManager } = context;
   const guild = event.guild;
-  const guildId = guild?.id;
-  if (!guildId) return;
+  if (!guild) return;
+  const guildId = guild.id;
 
   const config = await database.getConfig(guildId);
   if (!config?.modules?.antirôle?.enabled) return;
 
-  try {
-    if (await whitelistManager.isWhitelisted(guildId, event.executorId)) return;
-    if (await ownerManager.isExtraOwner(guildId, event.executorId)) return;
+  const oldPerms = event.old.role?.permissions?.bitfield || 0n;
+  const newPerms = event.role.permissions?.bitfield || 0n;
+  if (oldPerms === newPerms) return;
 
-    const oldPerms = event.old.role?.permissions?.serialize() || [];
-    const newPerms = event.role.permissions?.serialize() || [];
-    const escalation = getPermissionChanges(oldPerms, newPerms);
+  const escalation = getPermissionChanges(
+    Object.keys(oldPerms === 0n ? {} : { serialize: () => {} }),
+    Object.keys(newPerms === 0n ? {} : { serialize: () => {} })
+  );
 
-    if (escalation.dangerous) {
-      const risk = getRoleRisk(event.role);
-      if (risk >= 70) {
-        const snapshot = await snapshotManager.getRoleSnapshot(guildId, event.role.id);
-        if (snapshot) {
-          await event.role.setPermissions(snapshot.permissions, 'Luna: Reverting dangerous permission change').catch(() => null);
-        }
-        await punishmentEngine.punish(guildId, event.executorId, 'role_permission_escalation', risk);
-        await incidentEngine.create(guildId, 'antirôle', 'role_update', event.executorId, event.role.id, 'critical', risk, { addedPermissions: escalation.added, removedPermissions: escalation.removed }, 'revert_and_punish');
-      } else if (risk >= 30) {
-        await incidentEngine.create(guildId, 'antirôle', 'role_update', event.executorId, event.role.id, 'warning', risk, { addedPermissions: escalation.added, removedPermissions: escalation.removed }, 'log_only');
+  const hasDangerous = (newPerms & (1n << 3n)) !== 0n || (escalation.added?.includes?.('Administrator'));
+
+  const executorId = await auditCorrelator.resolveExecutor(guild, 'ROLE_UPDATE', event.role.id);
+  console.log(`[Security] Role updated: ${event.role.name} in ${guild.name} by ${executorId || 'unknown'} (dangerous: ${hasDangerous})`);
+
+  if (hasDangerous && executorId) {
+    if (await whitelistManager.isWhitelisted(guildId, executorId)) return;
+    if (await ownerManager.isExtraOwner(guildId, executorId)) return;
+
+    const risk = 85;
+    const actions = config.modules.antirôle.actions || {};
+
+    if (actions.restore) {
+      const snapshot = await snapshotManager.getRoleSnapshot(guildId, event.role.id);
+      if (snapshot) {
+        await event.role.setPermissions(snapshot.permissions, 'Luna: Reverting dangerous permission change').catch(() => null);
+        console.log(`[Security] Reverted role permissions: ${event.role.name}`);
       }
     }
-  } catch (err) {
-    console.error(`[Security] Error in handleRoleUpdate for guild ${guildId}:`, err);
+
+    if (actions.punish) {
+      await punishmentEngine.punish(guildId, executorId, actions.punish, `Dangerous permission escalation on role: ${event.role.name}`);
+    }
+
+    await incidentEngine.create(guildId, 'antirôle', 'role_update', executorId, event.role.id, 'critical', risk, { oldPerms: oldPerms.toString(), newPerms: newPerms.toString() }, 'revert_and_punish');
   }
-}
-
-function calculateRoleCreateRisk(event, recentCreates) {
-  let risk = 10;
-  const now = Date.now();
-  const recentCount = recentCreates.filter(t => now - t < 60000).length;
-  if (recentCount > 3) risk += 30;
-  if (recentCount > 6) risk += 35;
-  const dangerousPerms = ['Administrator', 'ManageGuild', 'ManageRoles', 'ManageChannels'];
-  const rolePerms = event.role.permissions?.serialize() || [];
-  if (dangerousPerms.some(p => rolePerms.includes(p))) risk += 20;
-  return Math.min(risk, 100);
-}
-
-function calculateRoleDeleteRisk(event, recentDeletes) {
-  let risk = 15;
-  const now = Date.now();
-  const recentCount = recentDeletes.filter(t => now - t < 60000).length;
-  if (recentCount > 2) risk += 35;
-  if (recentCount > 5) risk += 35;
-  return Math.min(risk, 100);
-}
-
-function calculateRoleEscalationRisk(escalation) {
-  let risk = 20;
-  if (escalation.added.includes('Administrator')) risk += 40;
-  if (escalation.added.includes('ManageGuild')) risk += 20;
-  if (escalation.added.includes('ManageRoles')) risk += 20;
-  if (escalation.added.includes('ManageChannels')) risk += 20;
-  return Math.min(risk, 100);
 }

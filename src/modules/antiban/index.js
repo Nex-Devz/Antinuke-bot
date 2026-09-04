@@ -1,56 +1,34 @@
-const DEFAULT_THRESHOLDS = {
-    window10s: { max: 5, windowMs: 10000 },
-    window30s: { max: 10, windowMs: 30000 },
-    window60s: { max: 20, windowMs: 60000 }
-};
-
 export async function handleBanAdd(event, context) {
-    const { client, cache, incidentEngine, punishmentEngine, auditCorrelator, whitelistManager, ownerManager } = context;
-    const guild = event.guild;
-    const guildId = guild?.id;
-    if (!guildId) return;
+  const { client, cache, database, incidentEngine, punishmentEngine, auditCorrelator, whitelistManager, ownerManager } = context;
+  const guild = event.guild;
+  if (!guild) return;
+  const guildId = guild.id;
 
-    const guildData = cache.get(guildId);
-    if (!guildData) return;
-    const config = guildData.config;
-    if (!config?.antiBan?.enabled) return;
+  const config = await database.getConfig(guildId);
+  if (!config?.modules?.antiban?.enabled) return;
 
-    try {
-        const executorId = event.executorId || await auditCorrelator.resolveBanExecutor(guild, event.ban?.user?.id || event.targetId);
+  const targetId = event.ban?.user?.id || event.targetId;
+  if (!targetId) return;
 
-        if (executorId) {
-            if (whitelistManager.isWhitelisted(guildId, executorId, 'BAN_ADD')) return;
-            if (ownerManager.isOwner(guildId, executorId)) return;
-        }
+  const executorId = event.executorId || await auditCorrelator.resolveBanExecutor(guild, targetId);
+  console.log(`[Security] Ban: ${targetId} in ${guild.name} by ${executorId || 'unknown'}`);
 
-        const thresholds = config.antiBan.thresholds || DEFAULT_THRESHOLDS;
-        const key = `ban:${executorId || 'unknown'}`;
+  if (executorId) {
+    if (await whitelistManager.isWhitelisted(guildId, executorId)) return;
+    if (await ownerManager.isExtraOwner(guildId, executorId)) return;
 
-        let exceeded = false;
-        let risk = 0;
+    const risk = 85;
+    const actions = config.modules.antiban.actions || {};
 
-        if (!cache.checkRateLimit(guildId, `${key}:10s`, thresholds.window10s?.max || 5, thresholds.window10s?.windowMs || 10000)) {
-            exceeded = true;
-            risk = 90;
-        } else if (!cache.checkRateLimit(guildId, `${key}:30s`, thresholds.window30s?.max || 10, thresholds.window30s?.windowMs || 30000)) {
-            exceeded = true;
-            risk = 75;
-        } else if (!cache.checkRateLimit(guildId, `${key}:60s`, thresholds.window60s?.max || 20, thresholds.window60s?.windowMs || 60000)) {
-            exceeded = true;
-            risk = 60;
-        }
-
-        if (exceeded && executorId) {
-            console.log(`[Security] Mass ban detected from ${executorId} in ${guild.name} (risk: ${risk})`);
-
-            const action = config.antiBan.actions?.punish || 'ban';
-            await punishmentEngine.punish(guildId, executorId, action, 'Luna: Mass ban detected');
-
-            await incidentEngine.create(guildId, 'antiban', 'MASS_BAN', executorId, event.ban?.user?.id || event.targetId, 'critical', risk, { banCount: (guildData.rateLimits?.get(`${key}:10s`)?.count || 1) }, action);
-        }
-
-        console.log(`[Security] Ban added: ${event.ban?.user?.id || event.targetId} in ${guild.name}`);
-    } catch (err) {
-        console.error(`[Security] Error in handleBanAdd for guild ${guildId}:`, err);
+    if (actions.unban) {
+      await guild.members.unban(targetId, 'Luna: Unauthorized ban').catch(e => console.log(`[Security] Failed to unban: ${e.message}`));
+      console.log(`[Security] Unbanned: ${targetId}`);
     }
+
+    if (actions.punish) {
+      await punishmentEngine.punish(guildId, executorId, actions.punish, `Unauthorized ban of ${targetId}`);
+    }
+
+    await incidentEngine.create(guildId, 'antiban', 'ban_add', executorId, targetId, 'critical', risk, { targetId }, 'unban_and_punish');
+  }
 }

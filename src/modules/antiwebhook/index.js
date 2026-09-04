@@ -1,139 +1,37 @@
-import { calculateWebhookRisk } from '../../security/RiskEngine.js';
-
-export async function handleWebhookCreate(event, context) {
-    const { client, cache, incidentEngine, punishmentEngine, snapshotManager, auditCorrelator, whitelistManager, ownerManager } = context;
-    const guild = event.guild;
-    const guildId = guild?.id;
-    if (!guildId) return;
-
-    const guildData = cache.get(guildId);
-    if (!guildData) return;
-    const config = guildData.config;
-    if (!config?.antiWebhook?.enabled) return;
-
-    try {
-        const executorId = event.executorId || await auditCorrelator.resolveExecutor(guild, 'WEBHOOK_CREATE', event.webhook.id);
-
-        if (executorId) {
-            if (whitelistManager.isWhitelisted(guildId, executorId, 'WEBHOOK_CREATE')) return;
-            if (ownerManager.isOwner(guildId, executorId)) return;
-        }
-
-        if (!cache.checkRateLimit(guildId, 'webhook:create', config.antiWebhook.thresholds?.maxPerMinute || 2, 60000)) {
-            const risk = calculateWebhookRisk('create', guild.webhooks?.cache?.size || 0);
-            console.log(`[Security] Mass webhook creation detected in ${guild.name} (risk: ${risk})`);
-
-            if (executorId) {
-                const action = config.antiWebhook.actions?.punish || 'ban';
-                await punishmentEngine.punish(guildId, executorId, action, 'Luna: Mass webhook creation');
-            }
-
-            await incidentEngine.create(guildId, 'antiWebhook', 'MASS_CREATE', executorId, event.webhook.id, 'high', risk, { webhookCount: guild.webhooks?.cache?.size }, action);
-        }
-
-        if (config.antiWebhook.actions?.delete) {
-            try {
-                await event.webhook.delete('Luna: Webhook creation blocked');
-                console.log(`[Security] Deleted webhook ${event.webhook.name} in ${guild.name}`);
-            } catch (err) {
-                console.log(`[Security] Failed to delete webhook: ${err.message}`);
-            }
-        }
-
-        await snapshotManager.takeWebhookSnapshot(guildId, event.webhook.id);
-        console.log(`[Security] Webhook created: ${event.webhook.name} in ${guild.name}`);
-    } catch (err) {
-        console.error(`[Security] Error in handleWebhookCreate for guild ${guildId}:`, err);
-    }
-}
-
-export async function handleWebhookDelete(event, context) {
-    const { client, cache, incidentEngine, punishmentEngine, snapshotManager, auditCorrelator, whitelistManager, ownerManager } = context;
-    const guild = event.guild;
-    const guildId = guild?.id;
-    if (!guildId) return;
-
-    const guildData = cache.get(guildId);
-    if (!guildData) return;
-    const config = guildData.config;
-    if (!config?.antiWebhook?.enabled) return;
-
-    try {
-        const executorId = event.executorId || await auditCorrelator.resolveExecutor(guild, 'WEBHOOK_DELETE', event.webhookId);
-
-        if (executorId) {
-            if (whitelistManager.isWhitelisted(guildId, executorId, 'WEBHOOK_DELETE')) return;
-            if (ownerManager.isOwner(guildId, executorId)) return;
-        }
-
-        if (!cache.checkRateLimit(guildId, 'webhook:delete', config.antiWebhook.thresholds?.maxPerMinute || 2, 60000)) {
-            const risk = calculateWebhookRisk('delete', 0);
-            console.log(`[Security] Mass webhook deletion detected in ${guild.name} (risk: ${risk})`);
-
-            if (executorId) {
-                const action = config.antiWebhook.actions?.punish || 'ban';
-                await punishmentEngine.punish(guildId, executorId, action, 'Luna: Mass webhook deletion');
-            }
-
-            await incidentEngine.create(guildId, 'antiWebhook', 'MASS_DELETE', executorId, event.webhookId, 'high', risk, { remaining: guild.webhooks?.cache?.size || 0 }, action);
-        }
-
-        if (cache.isProtectedWebhook(guildId, event.webhookId)) {
-            const snapshot = await snapshotManager.getSnapshot(guildId, `webhook:${event.webhookId}`);
-            if (snapshot) {
-                await snapshotManager.restoreWebhook(guildId, snapshot);
-                console.log(`[Security] Restored protected webhook ${event.webhookId} in ${guild.name}`);
-            }
-        }
-
-        console.log(`[Security] Webhook deleted: ${event.webhookId} in ${guild.name}`);
-    } catch (err) {
-        console.error(`[Security] Error in handleWebhookDelete for guild ${guildId}:`, err);
-    }
-}
-
 export async function handleWebhookUpdate(event, context) {
-    const { client, cache, incidentEngine, punishmentEngine, auditCorrelator, whitelistManager, ownerManager } = context;
-    const guild = event.guild;
-    const guildId = guild?.id;
-    if (!guildId) return;
+  const { client, cache, database, incidentEngine, punishmentEngine, snapshotManager, auditCorrelator, whitelistManager, ownerManager } = context;
+  const guild = event.guild;
+  if (!guild) return;
+  const guildId = guild.id;
 
-    const guildData = cache.get(guildId);
-    if (!guildData) return;
-    const config = guildData.config;
-    if (!config?.antiWebhook?.enabled) return;
+  const config = await database.getConfig(guildId);
+  if (!config?.modules?.antiwebhook?.enabled) return;
 
-    try {
-        const executorId = event.executorId || await auditCorrelator.resolveExecutor(guild, 'WEBHOOK_UPDATE', event.webhook.id);
+  const webhooks = await guild.fetchWebhooks().catch(() => []);
+  if (!webhooks || webhooks.size === 0) return;
 
-        if (executorId) {
-            if (whitelistManager.isWhitelisted(guildId, executorId, 'WEBHOOK_UPDATE')) return;
-            if (ownerManager.isOwner(guildId, executorId)) return;
-        }
+  for (const [, webhook] of webhooks) {
+    const executorId = await auditCorrelator.resolveExecutor(guild, 'WEBHOOK_CREATE', webhook.id);
 
-        const dangerousChanges = [];
-        if (event.changes) {
-            for (const change of event.changes) {
-                if (change.key === 'channel_id') dangerousChanges.push('channel');
-                if (change.key === 'name') dangerousChanges.push('name');
-                if (change.key === 'avatar') dangerousChanges.push('avatar');
-            }
-        }
+    if (executorId) {
+      if (await whitelistManager.isWhitelisted(guildId, executorId)) return;
+      if (await ownerManager.isExtraOwner(guildId, executorId)) return;
 
-        if (dangerousChanges.length > 0) {
-            const risk = calculateWebhookRisk('update', 0);
-            console.log(`[Security] Dangerous webhook update in ${guild.name}: ${dangerousChanges.join(', ')} (risk: ${risk})`);
+      console.log(`[Security] Webhook created: ${webhook.name} in ${guild.name} by ${executorId}`);
 
-            if (executorId) {
-                const action = config.antiWebhook.actions?.punish || 'ban';
-                await punishmentEngine.punish(guildId, executorId, action, 'Luna: Dangerous webhook update');
-            }
+      const risk = 75;
+      const actions = config.modules.antiwebhook.actions || {};
 
-            await incidentEngine.create(guildId, 'antiWebhook', 'DANGEROUS_UPDATE', executorId, event.webhook.id, 'medium', risk, { changes: dangerousChanges }, action);
-        }
+      if (actions.delete) {
+        await webhook.delete('Luna: Unauthorized webhook creation').catch(e => console.log(`[Security] Failed to delete webhook: ${e.message}`));
+        console.log(`[Security] Deleted unauthorized webhook: ${webhook.name}`);
+      }
 
-        console.log(`[Security] Webhook updated: ${event.webhook.name} in ${guild.name}`);
-    } catch (err) {
-        console.error(`[Security] Error in handleWebhookUpdate for guild ${guildId}:`, err);
+      if (actions.punish) {
+        await punishmentEngine.punish(guildId, executorId, actions.punish, `Unauthorized webhook creation: ${webhook.name}`);
+      }
+
+      await incidentEngine.create(guildId, 'antiWebhook', 'webhook_create', executorId, webhook.id, 'critical', risk, { webhookName: webhook.name }, 'delete_and_punish');
     }
+  }
 }

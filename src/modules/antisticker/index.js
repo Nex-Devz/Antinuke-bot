@@ -1,88 +1,93 @@
 export async function handleStickerCreate(event, context) {
   const { client, cache, database, incidentEngine, punishmentEngine, snapshotManager, auditCorrelator, whitelistManager, ownerManager } = context;
-  const config = await database.getConfig(event.guild.id);
+  const guild = event.guild;
+  if (!guild) return;
+  const guildId = guild.id;
+
+  const config = await database.getConfig(guildId);
   if (!config?.modules?.antisticker?.enabled) return;
 
-  if (await whitelistManager.isWhitelisted(event.guild.id, event.executorId)) return;
-  if (await ownerManager.isExtraOwner(event.guild.id, event.executorId)) return;
+  const executorId = event.executorId || await auditCorrelator.resolveExecutor(guild, 'STICKER_CREATE', event.sticker.id);
+  console.log(`[Security] Sticker created: ${event.sticker.name} in ${guild.name} by ${executorId || 'unknown'}`);
 
-  const risk = calculateStickerCreateRisk(event);
-  console.log(`[Security] Sticker created in ${event.guild.name} (risk: ${risk})`);
+  if (executorId) {
+    if (await whitelistManager.isWhitelisted(guildId, executorId)) return;
+    if (await ownerManager.isExtraOwner(guildId, executorId)) return;
 
-  if (risk >= 70) {
-    const action = config.modules.antisticker.actions?.punish || 'kick';
-    await punishmentEngine.punish(event.guild.id, event.executorId, 'sticker_create_spam', action);
-    await incidentEngine.create(event.guild.id, 'antisticker', 'sticker_create', event.executorId, event.sticker.id, 'high', risk, { sticker: event.sticker.toJSON() }, 'punish');
-  } else if (risk >= 30) {
-    await incidentEngine.create(event.guild.id, 'antisticker', 'sticker_create', event.executorId, event.sticker.id, 'warning', risk, { sticker: event.sticker.toJSON() }, 'log_only');
+    const risk = 70;
+    const actions = config.modules.antisticker.actions || {};
+    await snapshotManager.takeStickerSnapshot(guildId, event.sticker.id);
+
+    if (actions.restore) {
+      await event.sticker.delete('Luna: Unauthorized sticker creation').catch(e => console.log(`[Security] Failed to delete sticker: ${e.message}`));
+      console.log(`[Security] Deleted unauthorized sticker: ${event.sticker.name}`);
+    }
+
+    if (actions.punish) {
+      await punishmentEngine.punish(guildId, executorId, actions.punish, `Unauthorized sticker creation: ${event.sticker.name}`);
+    }
+
+    await incidentEngine.create(guildId, 'antisticker', 'sticker_create', executorId, event.sticker.id, 'critical', risk, { sticker: event.sticker.toJSON() }, 'delete_and_punish');
   }
-
-  console.log(`[Security] Sticker created: ${event.sticker.name} in ${event.guild.name}`);
 }
 
 export async function handleStickerDelete(event, context) {
   const { client, cache, database, incidentEngine, punishmentEngine, snapshotManager, auditCorrelator, whitelistManager, ownerManager } = context;
-  const config = await database.getConfig(event.guild.id);
+  const guild = event.guild;
+  if (!guild) return;
+  const guildId = guild.id;
+
+  const config = await database.getConfig(guildId);
   if (!config?.modules?.antisticker?.enabled) return;
 
-  if (await whitelistManager.isWhitelisted(event.guild.id, event.executorId)) return;
-  if (await ownerManager.isExtraOwner(event.guild.id, event.executorId)) return;
+  const executorId = event.executorId || await auditCorrelator.resolveExecutor(guild, 'STICKER_DELETE', event.stickerId);
+  console.log(`[Security] Sticker deleted: ${event.sticker?.name || event.stickerId} in ${guild.name} by ${executorId || 'unknown'}`);
 
-  const recentDeletes = await cache.get(event.guild.id).antisticker?.recentDeletes || [];
-  const risk = calculateStickerDeleteRisk(event, recentDeletes);
-  console.log(`[Security] Sticker deleted in ${event.guild.name} (risk: ${risk})`);
+  if (executorId) {
+    if (await whitelistManager.isWhitelisted(guildId, executorId)) return;
+    if (await ownerManager.isExtraOwner(guildId, executorId)) return;
 
-  if (risk >= 70) {
-    const snapshot = await snapshotManager.getSnapshot(event.guild.id, `sticker:${event.stickerId}`);
-    if (snapshot && config.modules.antisticker.actions?.restore) {
-      await snapshotManager.restoreSticker(event.guild.id, snapshot).catch(() => null);
-      console.log(`[Security] Restored sticker ${event.stickerId} in ${event.guild.name}`);
+    const risk = 70;
+    const actions = config.modules.antisticker.actions || {};
+
+    if (actions.restore) {
+      const snapshot = await snapshotManager.getSnapshot(guildId, `sticker:${event.stickerId}`);
+      if (snapshot) {
+        await snapshotManager.restoreSticker(guildId, snapshot).catch(e => console.log(`[Security] Failed to restore sticker: ${e.message}`));
+        console.log(`[Security] Restored sticker: ${snapshot.name}`);
+      }
     }
-    const action = config.modules.antisticker.actions?.punish || 'kick';
-    await punishmentEngine.punish(event.guild.id, event.executorId, 'sticker_delete_spam', action);
-    await incidentEngine.create(event.guild.id, 'antisticker', 'sticker_delete', event.executorId, event.stickerId, 'high', risk, { recentDeletes: recentDeletes.length }, 'restore_and_punish');
-  } else if (risk >= 30) {
-    await incidentEngine.create(event.guild.id, 'antisticker', 'sticker_delete', event.executorId, event.stickerId, 'warning', risk, { recentDeletes: recentDeletes.length }, 'log_only');
-  }
 
-  console.log(`[Security] Sticker deleted: ${event.stickerId} in ${event.guild.name}`);
+    if (actions.punish) {
+      await punishmentEngine.punish(guildId, executorId, actions.punish, `Unauthorized sticker deletion: ${event.sticker?.name || event.stickerId}`);
+    }
+
+    await incidentEngine.create(guildId, 'antisticker', 'sticker_delete', executorId, event.stickerId, 'critical', risk, { stickerName: event.sticker?.name }, 'restore_and_punish');
+  }
 }
 
 export async function handleStickerUpdate(event, context) {
   const { client, cache, database, incidentEngine, punishmentEngine, auditCorrelator, whitelistManager, ownerManager } = context;
-  const config = await database.getConfig(event.guild.id);
+  const guild = event.guild;
+  if (!guild) return;
+  const guildId = guild.id;
+
+  const config = await database.getConfig(guildId);
   if (!config?.modules?.antisticker?.enabled) return;
 
-  if (await whitelistManager.isWhitelisted(event.guild.id, event.executorId)) return;
-  if (await ownerManager.isExtraOwner(event.guild.id, event.executorId)) return;
+  const executorId = event.executorId || await auditCorrelator.resolveExecutor(guild, 'STICKER_UPDATE', event.sticker.id);
+  console.log(`[Security] Sticker updated: ${event.sticker.name} in ${guild.name} by ${executorId || 'unknown'}`);
 
-  const changes = event.changes || [];
-  const hasAbuse = changes.some(c => c.key === 'name' && c.newValue && (c.newValue.includes('@') || c.newValue.length > 32));
+  if (executorId) {
+    if (await whitelistManager.isWhitelisted(guildId, executorId)) return;
+    if (await ownerManager.isExtraOwner(guildId, executorId)) return;
 
-  if (hasAbuse) {
-    const risk = 40;
-    console.log(`[Security] Abusive sticker update in ${event.guild.name} (risk: ${risk})`);
+    const risk = 50;
+    const actions = config.modules.antisticker.actions || {};
+    if (actions.punish) {
+      await punishmentEngine.punish(guildId, executorId, actions.punish, `Unauthorized sticker update: ${event.sticker.name}`);
+    }
 
-    const action = config.modules.antisticker.actions?.punish || 'kick';
-    await punishmentEngine.punish(event.guild.id, event.executorId, 'sticker_abuse', action);
-    await incidentEngine.create(event.guild.id, 'antisticker', 'sticker_update', event.executorId, event.sticker.id, 'low', risk, { changes }, 'punish');
+    await incidentEngine.create(guildId, 'antisticker', 'sticker_update', executorId, event.sticker.id, 'medium', risk, { stickerName: event.sticker.name }, 'log_only');
   }
-
-  console.log(`[Security] Sticker updated: ${event.sticker.name} in ${event.guild.name}`);
-}
-
-function calculateStickerCreateRisk(event) {
-  let risk = 10;
-  if (event.sticker.format_type === 3) risk += 20;
-  if (event.sticker.name && event.sticker.name.length > 32) risk += 15;
-  return Math.min(risk, 100);
-}
-
-function calculateStickerDeleteRisk(event, recentDeletes) {
-  let risk = 15;
-  const now = Date.now();
-  const recentCount = recentDeletes.filter(t => now - t < 60000).length;
-  if (recentCount > 3) risk += 35;
-  if (recentCount > 6) risk += 35;
-  return Math.min(risk, 100);
 }
