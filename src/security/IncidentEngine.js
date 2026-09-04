@@ -4,45 +4,20 @@ export class IncidentEngine {
   }
 
   async create(guildId, module, action, executorId, targetId, severity, risk, evidence, actionTaken) {
-    const id = `${guildId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    const incident = {
-      id,
-      guildId,
-      module,
-      action,
-      executorId,
-      targetId,
-      severity,
-      risk,
-      evidence: JSON.stringify(evidence),
-      actionTaken,
-      createdAt: new Date().toISOString()
-    };
+    const executor = String(executorId || 'unknown');
+    const target = String(targetId || 'unknown');
+    const createdAt = new Date().toISOString();
 
-    await this.database.incidents.insert(incident);
-
-    if (severity === 'critical') {
-      console.log(`[Security] Critical incident in ${module}: ${action} by ${executorId} in guild ${guildId}`);
+    try {
+      this.database.addIncident(guildId, module, action, executor, target, severity, risk, evidence, actionTaken, createdAt);
+    } catch (err) {
+      console.error(`[Security] Failed to log incident: ${err.message}`);
     }
 
-    return incident;
-  }
+    if (severity === 'critical') {
+      console.log(`[Security] Critical incident in ${module}: ${action} by ${executor} in guild ${guildId}`);
+    }
 
-  async getRecent(guildId, limit = 50) {
-    return this.database.incidents.find({ guildId }).sort({ createdAt: -1 }).limit(limit);
-  }
-
-  async getByModule(guildId, module, limit = 50) {
-    return this.database.incidents.find({ guildId, module }).sort({ createdAt: -1 }).limit(limit);
-  }
-
-  async getBySeverity(guildId, severity, limit = 50) {
-    return this.database.incidents.find({ guildId, severity }).sort({ createdAt: -1 }).limit(limit);
-  }
-
-  async cleanup(guildId, olderThanDays) {
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - olderThanDays);
-    return this.database.incidents.deleteMany({ guildId, createdAt: { $lt: cutoff.toISOString() } });
+    return { guildId, module, action, executorId: executor, targetId: target, severity, risk, actionTaken };
   }
 }

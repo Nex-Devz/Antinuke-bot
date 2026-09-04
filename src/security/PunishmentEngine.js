@@ -27,9 +27,12 @@ export class PunishmentEngine {
     const guild = this.client.guilds.cache.get(guildId);
     if (!guild) return { error: 'Guild not found' };
 
+    const id = String(executorId || '');
+    if (!id || id === 'unknown' || id === '[object Object]') return { guild, member: null };
+
     let member = null;
     try {
-      member = await guild.members.fetch(executorId).catch(() => null);
+      member = await guild.members.fetch(id).catch(() => null);
     } catch {
       member = null;
     }
@@ -75,6 +78,7 @@ export class PunishmentEngine {
   }
 
   async #ban(guild, member, reason) {
+    if (!member) return { success: false, error: 'Member not found in guild' };
     try {
       await guild.members.ban(member, { reason });
       console.log(`[Security] Banned ${member.user?.tag || member.id}`);
@@ -85,6 +89,7 @@ export class PunishmentEngine {
   }
 
   async #kick(guild, member, reason) {
+    if (!member) return { success: false, error: 'Member not found in guild' };
     try {
       await member.kick(reason);
       console.log(`[Security] Kicked ${member.user?.tag || member.id}`);
@@ -95,6 +100,7 @@ export class PunishmentEngine {
   }
 
   async #timeout(guild, member, reason) {
+    if (!member) return { success: false, error: 'Member not found in guild' };
     try {
       const duration = this.cache?.get?.(`${guild.id}:timeout_duration`) ?? 600000;
       const until = new Date(Date.now() + duration);

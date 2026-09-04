@@ -17,11 +17,12 @@ export class AuditCorrelator {
 
             const now = Date.now();
             for (const [, entry] of auditLogs.entries) {
-                if (entry.targetId === targetId) {
+                if (entry.targetId === String(targetId)) {
                     const timeDiff = now - entry.createdTimestamp;
                     if (timeDiff <= windowMs) {
-                        this.cache?.set(cacheKey, entry.executorId, 30000);
-                        return entry.executorId;
+                        const id = String(entry.executorId || '');
+                        this.cache?.set(cacheKey, id, 30000);
+                        return id;
                     }
                 }
             }
