@@ -19,19 +19,20 @@ import {
   RadioGroupOptionBuilder
 } from "discord.js";
 import { RULE_TYPES, MODULE_STATES } from "./AutoModManager.js";
+import { getEmoji } from "../utils/emoji.js";
 
 function stateEmoji(state) {
   switch (state) {
     case "ready":
-      return "\u2705";
+      return getEmoji("enabled") || "\u2705";
     case "disabled":
-      return "\u26D4";
+      return getEmoji("Disabled") || "\u26D4";
     case "loading":
-      return "\u23F3";
+      return getEmoji("loading") || "\u23F3";
     case "error":
-      return "\u274C";
+      return getEmoji("floovi_cross") || "\u274C";
     default:
-      return "\uD83D\uDD04";
+      return getEmoji("Refresh") || "\uD83D\uDD04";
   }
 }
 

@@ -36,6 +36,7 @@ import { automodCommand, handleAutoModCommand, handleAutoModButton, handleAutoMo
 import { registerEvents } from './events/index.js';
 import { commandDefinitions, handleCommand, handleModalSubmit, buildStatusContainer, buildAntinukeSetupModal } from './commands/index.js';
 import { onReady } from './events/ready.js';
+import { getEmoji } from './utils/emoji.js';
 
 console.log('[Luna] Starting up...');
 
@@ -292,7 +293,7 @@ client.on(Events.MessageCreate, async (message) => {
     try {
       const section = new SectionBuilder()
         .addTextDisplayComponents(
-          new TextDisplayBuilder().setContent('# Luna\nAnti-nuke security bot')
+          new TextDisplayBuilder().setContent(`# ${getEmoji('lune_cyan')} Luna\nAnti-nuke security bot`)
         )
         .setThumbnailAccessory(
           new ThumbnailBuilder().setURL(avatarUrl)
@@ -300,7 +301,7 @@ client.on(Events.MessageCreate, async (message) => {
       container.addSectionComponents(section);
     } catch {
       container.addTextDisplayComponents(
-        new TextDisplayBuilder().setContent('# Luna\nAnti-nuke security bot')
+        new TextDisplayBuilder().setContent(`# ${getEmoji('lune_cyan')} Luna\nAnti-nuke security bot`)
       );
     }
 
@@ -334,7 +335,7 @@ client.on(Events.MessageCreate, async (message) => {
 
     const section = new SectionBuilder()
       .addTextDisplayComponents(
-        new TextDisplayBuilder().setContent('# Luna Commands\nYour cute anime security guardian')
+        new TextDisplayBuilder().setContent(`# ${getEmoji('lune_cyan')} Luna Commands\nYour cute anime security guardian`)
       )
       .setThumbnailAccessory(
         new ThumbnailBuilder().setURL(avatarUrl)
