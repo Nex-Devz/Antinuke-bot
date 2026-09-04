@@ -4,7 +4,7 @@
 
 ### Discord Anti-Nuke & Anti-Abuse Security Bot
 
-<img src="https://cdn.jsdelivr.net/gh/Nex-Devz/Antinuke-bot@main/assets/lune-logo.svg" alt="Lune Logo" width="128" height="128">
+<img src="https://cdn.jsdelivr.net/gh/Nex-Devz/Antinuke-bot@main/assets/lune-logo.png" alt="Lune Logo" width="128" height="128">
 
 <div>
 <img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/discord/discord-original.svg" alt="Discord" width="48" height="48" style="margin-right: 12px;">
