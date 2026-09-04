@@ -5,7 +5,8 @@ export class WhitelistManager {
   }
 
   isWhitelisted(guildId, userId, action) {
-    const entries = this.cache.get(`${guildId}:whitelist`) || [];
+    const raw = this.cache.get(`${guildId}:whitelist`);
+    const entries = Array.isArray(raw) ? raw : [];
     const userLower = userId.toLowerCase();
 
     for (const entry of entries) {
@@ -101,7 +102,8 @@ export class WhitelistManager {
   }
 
   getList(guildId) {
-    return this.cache.get(`${guildId}:whitelist`) || [];
+    const raw = this.cache.get(`${guildId}:whitelist`);
+    return Array.isArray(raw) ? raw : [];
   }
 
   async loadGuild(guildId) {

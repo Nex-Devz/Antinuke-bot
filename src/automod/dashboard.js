@@ -52,7 +52,6 @@ function baseContainer() {
 }
 
 function navRow(active) {
-  const buttons = [];
   const defs = [
     ["overview", "Overview"],
     ["modules", "Modules"],
@@ -63,15 +62,15 @@ function navRow(active) {
     ["settings", "Settings"],
     ["logs", "Logs"]
   ];
-  for (const [key, label] of defs) {
-    buttons.push(
+  const make = (slice) => new ActionRowBuilder().addComponents(
+    ...slice.map(([key, label]) =>
       new ButtonBuilder()
         .setCustomId(`am_nav:${key}`)
         .setLabel(label)
         .setStyle(active === key ? ButtonStyle.Primary : ButtonStyle.Secondary)
-    );
-  }
-  return new ActionRowBuilder().addComponents(buttons);
+    )
+  );
+  return [make(defs.slice(0, 4)), make(defs.slice(4))];
 }
 
 function moduleButtons(guildId, type, rule) {
@@ -141,7 +140,7 @@ export function buildOverviewContainer(manager, guildId) {
     )
   );
 
-  container.addActionRowComponents(navRow("overview"));
+  container.addActionRowComponents(...navRow("overview"));
   container.addActionRowComponents(
     new ActionRowBuilder().addComponents(
       new ButtonBuilder()
@@ -188,7 +187,7 @@ export function buildModulesContainer(manager, guildId) {
       }))
     );
 
-  container.addActionRowComponents(navRow("modules"));
+  container.addActionRowComponents(...navRow("modules"));
   container.addActionRowComponents(new ActionRowBuilder().addComponents(select));
   container.addSeparatorComponents(new SeparatorBuilder());
   container.addTextDisplayComponents(
@@ -245,7 +244,7 @@ export function buildConfigureContainer(manager, guildId, type) {
     )
   );
 
-  container.addActionRowComponents(navRow("configure"));
+  container.addActionRowComponents(...navRow("configure"));
   return container;
 }
 
@@ -276,7 +275,7 @@ export function buildRulesContainer(manager, guildId) {
         .setStyle(ButtonStyle.Primary)
     )
   );
-  container.addActionRowComponents(navRow("rules"));
+  container.addActionRowComponents(...navRow("rules"));
   container.addSeparatorComponents(new SeparatorBuilder());
   container.addTextDisplayComponents(
     new TextDisplayBuilder().setContent("[Zynrax Development](https://discord.gg/zynrax)")
@@ -330,7 +329,7 @@ export function buildExclusionsContainer(manager, guildId, type) {
     )
   );
 
-  container.addActionRowComponents(navRow("exclusions"));
+  container.addActionRowComponents(...navRow("exclusions"));
   return container;
 }
 
@@ -359,7 +358,7 @@ export function buildStatisticsContainer(manager, guildId) {
     new TextDisplayBuilder().setContent(`**Recent Violations**\n${recent}`)
   );
 
-  container.addActionRowComponents(navRow("stats"));
+  container.addActionRowComponents(...navRow("stats"));
   container.addSeparatorComponents(new SeparatorBuilder());
   container.addTextDisplayComponents(
     new TextDisplayBuilder().setContent("[Zynrax Development](https://discord.gg/zynrax)")
@@ -408,7 +407,7 @@ export function buildSettingsContainer(manager, guildId) {
         .setStyle(ButtonStyle.Secondary)
     )
   );
-  container.addActionRowComponents(navRow("settings"));
+  container.addActionRowComponents(...navRow("settings"));
   return container;
 }
 
@@ -426,7 +425,7 @@ export function buildLogsContainer(manager, guildId) {
     : "> No logged violations yet.";
 
   container.addTextDisplayComponents(new TextDisplayBuilder().setContent(lines));
-  container.addActionRowComponents(navRow("logs"));
+  container.addActionRowComponents(...navRow("logs"));
   container.addSeparatorComponents(new SeparatorBuilder());
   container.addTextDisplayComponents(
     new TextDisplayBuilder().setContent("[Zynrax Development](https://discord.gg/zynrax)")

@@ -1,5 +1,4 @@
-import { SlashCommandBuilder, PermissionFlagsBits, ActionRowBuilder, ButtonBuilder, ButtonStyle, ContainerBuilder, TextDisplayBuilder, SeparatorBuilder, SectionBuilder, ThumbnailBuilder, StringSelectMenuBuilder, ModalBuilder, UserSelectMenuBuilder, LabelBuilder, RadioGroupBuilder, RadioGroupOptionBuilder, CheckboxGroupBuilder, CheckboxGroupOptionBuilder } from 'discord.js';
-import { getEmoji } from '../utils/emoji.js';
+import { SlashCommandBuilder, PermissionFlagsBits, ActionRowBuilder, ButtonBuilder, ButtonStyle, ContainerBuilder, TextDisplayBuilder, SeparatorBuilder, SectionBuilder, ThumbnailBuilder, ModalBuilder, UserSelectMenuBuilder, LabelBuilder, RadioGroupBuilder, RadioGroupOptionBuilder, CheckboxGroupBuilder, CheckboxGroupOptionBuilder } from 'discord.js';
 
 const antinukeCommand = new SlashCommandBuilder()
   .setName('antinuke')
@@ -120,14 +119,11 @@ function buildStatusContainer(config, state, enabled) {
   const client = state?.client;
   const avatarUrl = client?.user?.displayAvatarURL({ size: 256 }) || '';
 
-  const tick = getEmoji('floovi_tick');
-  const cross = getEmoji('floovi_cross');
-
   const modules = Object.entries(config || {})
     .filter(([k, v]) => typeof v === 'object' && v !== null && 'enabled' in v);
 
   const moduleList = modules
-    .map(([k, v]) => `> ${v.enabled ? (tick || '\u2705') : (cross || '\u274C')} **${formatModuleName(k)}**`)
+    .map(([k, v]) => `> ${v.enabled ? '**ON**' : '**OFF**'} \u2022 ${formatModuleName(k)}`)
     .join('\n') || '> No modules configured';
 
   const status = enabled ? '**ACTIVE**' : '**DISABLED**';
@@ -165,24 +161,6 @@ function buildStatusContainer(config, state, enabled) {
       new TextDisplayBuilder().setContent(`**Whitelisted:** ${state.whitelist.size} | **Owners:** ${state.extraOwners.size}`)
     );
 
-  const moduleSelect = new StringSelectMenuBuilder()
-    .setCustomId('module_toggle')
-    .setPlaceholder('Select a module to toggle...')
-    .addOptions(
-      modules.slice(0, 25).map(([k, v]) => {
-        const tag = v.enabled ? (tick || '\u2705') : (cross || '\u274C');
-        const emojiMatch = tag.match(/^<a?:(\w+):(\d+)>$/);
-        return {
-          label: `${v.enabled ? 'ON' : 'OFF'} \u2022 ${formatModuleName(k)}`,
-          description: 'Select to toggle this module',
-          value: k,
-          emoji: emojiMatch
-            ? { id: emojiMatch[2], name: emojiMatch[1] }
-            : tag
-        };
-      })
-    );
-
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId('antinuke_enable')
@@ -205,9 +183,6 @@ function buildStatusContainer(config, state, enabled) {
       .setStyle(ButtonStyle.Primary)
   );
   container.addActionRowComponents(row);
-
-  const selectRow = new ActionRowBuilder().addComponents(moduleSelect);
-  container.addActionRowComponents(selectRow);
 
   container.addSeparatorComponents(new SeparatorBuilder());
   container.addTextDisplayComponents(

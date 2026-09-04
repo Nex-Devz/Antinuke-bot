@@ -8,7 +8,14 @@ export class OwnerManager {
     const guild = this.cache.get(`${guildId}:guild`);
     if (guild && guild.ownerId === userId) return true;
 
-    const owners = this.cache.get(`${guildId}:owners`) || [];
+    const raw = this.cache.get(`${guildId}:owners`);
+    const owners = Array.isArray(raw) ? raw : [];
+    return owners.some(o => o.userId === userId);
+  }
+
+  isExtraOwner(guildId, userId) {
+    const raw = this.cache.get(`${guildId}:owners`);
+    const owners = Array.isArray(raw) ? raw : [];
     return owners.some(o => o.userId === userId);
   }
 
