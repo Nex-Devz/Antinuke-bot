@@ -1,8 +1,10 @@
 <div align="center">
 
-# AntiN8
+# Lune
 
 ### Discord Anti-Nuke & Anti-Abuse Security Bot
+
+<img src="https://cdn.discordapp.com/embed/avatars/10.png" alt="Lune Logo" width="64" height="64">
 
 ![Node.js](https://img.shields.io/badge/Node.js-18%2B-339933?style=flat-square&logo=node.js&logoColor=white)
 ![Discord.js](https://img.shields.io/badge/Discord.js-14-5865F2?style=flat-square&logo=discord&logoColor=white)
@@ -14,13 +16,13 @@
 
 ---
 
-## What is AntiN8?
+## What is Lune?
 
-AntiN8 is a production-grade Discord security bot that protects your server from nukes, raids, and abuse. It monitors every Gateway event in real time, applies risk analysis, and enforces configurable punishments -- all without polling or external databases. It also ships a full **AutoMod** toolkit that provisions native Discord AutoMod rules from an in-chat dashboard.
+Lune is a production-grade Discord security bot that protects your server from nukes, raids, and abuse. It monitors every Gateway event in real time, applies risk analysis, and enforces configurable punishments -- all without polling or external databases. It also ships a full **AutoMod** toolkit that provisions native Discord AutoMod rules from an in-chat dashboard.
 
 ---
 
-## 20 Security Modules
+## 19 Security Modules
 
 <details>
 <summary><b>Channel Protection</b></summary>
@@ -74,7 +76,7 @@ AntiN8 is a production-grade Discord security bot that protects your server from
 ```
    Discord Gateway Event
           |
-    Memory Cache Check
+   Memory Cache Check
           |
    Local Risk Calculation
           |
@@ -92,7 +94,7 @@ AntiN8 is a production-grade Discord security bot that protects your server from
 | Table | Purpose |
 |-------|---------|
 | `guild_automod` | Per-guild AutoMod settings (log channel, notifications, DM, escalation) |
-| `automod_rules` | Luna's rule definitions + their state and Discord rule ID |
+| `automod_rules` | Lune's rule definitions + their state and Discord rule ID |
 | `automod_violations` | Every enforcement event (user, rule, channel, action, timestamp) |
 | `automod_stats` | Daily counters for blocked / timeout / alert actions |
 
@@ -172,7 +174,7 @@ All punishments verify: bot permissions, role hierarchy, target manageability, n
 
 ## AutoMod
 
-Luna also manages native **Discord AutoMod** rules from a Component V2 dashboard opened with `/automod`. No need to touch Discord's built-in AutoMod settings -- everything is driven from the `/automod` panel.
+Lune also manages native **Discord AutoMod** rules from a Component V2 dashboard opened with `/automod`. No need to touch Discord's built-in AutoMod settings -- everything is driven from the `/automod` panel.
 
 **Modules**
 
