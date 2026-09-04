@@ -1,150 +1,77 @@
-const DEFAULT_TRUSTED_BOTS = [];
-
-async function isTrustedBot(botId, config) {
-  const trustedBots = config?.antibot?.trusted_bots || DEFAULT_TRUSTED_BOTS;
-  return trustedBots.includes(botId);
-}
-
-async function isAllowedBot(botId, config) {
-  const allowedBots = config?.antibot?.allowed_bots || [];
-  const blockedBots = config?.antibot?.blocked_bots || [];
-
-  if (blockedBots.includes(botId)) {
-    return false;
-  }
-
-  if (allowedBots.length === 0) {
-    return true;
-  }
-
-  return allowedBots.includes(botId);
-}
-
-async function getInviter(member, context) {
-  const { client, cache } = context;
-
-  try {
-    const auditLogs = await member.guild.fetchAuditLogs({
-      type: 'BOT_ADD',
-      limit: 1
-    });
-
-    const entry = auditLogs.entries.first();
-    if (!entry) return null;
-
-    if (entry.target.id !== member.id) return null;
-
-    return entry.executor;
-  } catch (error) {
-    console.log(`[Security] Failed to fetch inviter: ${error.message}`);
-    return null;
-  }
-}
-
-async function kickBot(member, reason, context) {
-  const { client, incidentEngine, punishmentEngine } = context;
-
-  try {
-    await member.kick(reason);
-    console.log(`[Security] Kicked unauthorized bot: ${member.user.tag} (${member.id})`);
-    return true;
-  } catch (error) {
-    console.log(`[Security] Failed to kick bot ${member.user.tag}: ${error.message}`);
-    return false;
-  }
-}
-
 export async function handleBotAdd(member, context) {
-  const { client, cache, database, incidentEngine, punishmentEngine, snapshotManager, auditCorrelator, whitelistManager, ownerManager } = context;
+  const { client, cache, database, incidentEngine, punishmentEngine, auditCorrelator, whitelistManager, ownerManager } = context;
 
   try {
-    const config = cache.get('config');
-    if (!config?.modules?.antibot?.enabled) {
-      return;
-    }
+    const config = await database.getConfig(member.guild.id);
+    if (!config?.modules?.antibot?.enabled) return;
 
-    if (!member.user.bot) {
-      return;
-    }
+    if (!member.user.bot) return;
 
     const botId = member.id;
 
-    const trusted = await isTrustedBot(botId, config);
-    if (trusted) {
-      console.log(`[Security] Trusted bot joined: ${member.user.tag} (${botId})`);
-      return;
-    }
+    const trustedBots = config?.antibot?.trusted_bots || [];
+    if (trustedBots.includes(botId)) return;
 
-    const allowed = await isAllowedBot(botId, config);
-    if (!allowed) {
+    const blockedBots = config?.antibot?.blocked_bots || [];
+    const allowedBots = config?.antibot?.allowed_bots || [];
+
+    if (blockedBots.includes(botId)) {
       console.log(`[Security] Blocked bot attempted to join: ${member.user.tag} (${botId})`);
+      await member.kick('Luna: Bot is blocked').catch(e => console.log(`[Security] Failed to kick: ${e.message}`));
 
-      await kickBot(member, 'Luna: Bot is blocked', context);
-
-      await incidentEngine.log({
-        type: 'BLOCKED_BOT_JOIN',
-        severity: 'HIGH',
-        target: botId,
-        guild: member.guild.id,
-        details: {
-          botTag: member.user.tag,
-          botName: member.user.username,
-          botDiscriminator: member.user.discriminator,
-          reason: 'Bot is in blocked list'
-        }
-      });
-      return;
-    }
-
-    const inviter = await getInviter(member, context);
-
-    if (inviter) {
-      if (whitelistManager.isWhitelisted(inviter.id)) {
-        console.log(`[Security] Whitelisted user invited bot: ${inviter.tag} invited ${member.user.tag}`);
-        return;
-      }
-
-      if (await ownerManager.isExtraOwner(inviter.id)) {
-        console.log(`[Security] Extra owner invited bot: ${inviter.tag} invited ${member.user.tag}`);
-        return;
-      }
-    }
-
-    if (!config?.antibot?.require_invite_verification) {
-      return;
-    }
-
-    console.log(`[Security] Unauthorized bot addition: ${member.user.tag} (${botId}) added by ${inviter?.tag || 'unknown'}`);
-
-    await kickBot(member, 'Luna: Unauthorized bot addition', context);
-
-    if (inviter) {
-      const punishmentConfig = config?.antibot?.inviter_punishment || 'KICK';
-      const duration = config?.antibot?.inviter_punishment_duration || 86400000;
-
-      await punishmentEngine.apply(member.guild, {
-        type: punishmentConfig,
-        moderator: client.user,
-        reason: `Unauthorized bot invitation: ${member.user.tag}`,
-        duration: punishmentConfig === 'TEMPBAN' ? duration : undefined,
-        target: inviter
-      });
-    }
-
-    await incidentEngine.log({
-      type: 'UNAUTHORIZED_BOT_ADD',
-      severity: 'HIGH',
-      target: botId,
-      guild: member.guild.id,
-      details: {
+      await incidentEngine.create(member.guild.id, 'antibot', 'blocked_bot_join', botId, botId, 'high', 80, {
         botTag: member.user.tag,
-        botName: member.user.username,
-        botDiscriminator: member.user.discriminator,
-        inviterId: inviter?.id,
-        inviterTag: inviter?.tag,
-        inviterPunished: !!inviter
+        reason: 'Bot is in blocked list'
+      }, 'kick');
+      return;
+    }
+
+    if (allowedBots.length > 0 && !allowedBots.includes(botId)) {
+      console.log(`[Security] Bot not in allowlist: ${member.user.tag} (${botId})`);
+      await member.kick('Luna: Bot not in allowlist').catch(e => console.log(`[Security] Failed to kick: ${e.message}`));
+
+      await incidentEngine.create(member.guild.id, 'antibot', 'unauthorized_bot_join', botId, botId, 'high', 75, {
+        botTag: member.user.tag,
+        reason: 'Bot not in allowlist'
+      }, 'kick');
+      return;
+    }
+
+    if (!config?.antibot?.require_invite_verification) return;
+
+    let inviterId = null;
+    try {
+      const auditLogs = await member.guild.fetchAuditLogs({ type: 'BOT_ADD', limit: 1 });
+      const entry = auditLogs.entries.first();
+      if (entry && entry.target.id === member.id) {
+        inviterId = entry.executor?.id;
       }
-    });
+    } catch {
+      // ignore
+    }
+
+    if (inviterId) {
+      if (await whitelistManager.isWhitelisted(member.guild.id, inviterId)) return;
+      if (await ownerManager.isExtraOwner(member.guild.id, inviterId)) return;
+    }
+
+    console.log(`[Security] Unauthorized bot addition: ${member.user.tag} (${botId}) by ${inviterId || 'unknown'}`);
+
+    await member.kick('Luna: Unauthorized bot addition').catch(e => console.log(`[Security] Failed to kick: ${e.message}`));
+
+    if (inviterId) {
+      const punishmentType = config?.antibot?.inviter_punishment || 'KICK';
+      await punishmentEngine.punish(member.guild.id, inviterId, punishmentType, `Luna: Unauthorized bot invitation: ${member.user.tag}`).catch(e => {
+        console.log(`[Security] Failed to punish inviter ${inviterId}: ${e.message}`);
+        return null;
+      });
+    }
+
+    await incidentEngine.create(member.guild.id, 'antibot', 'unauthorized_bot_add', inviterId || botId, botId, 'high', 75, {
+      botTag: member.user.tag,
+      inviterId,
+      inviterTag: inviterId ? null : undefined
+    }, 'kick_and_punish');
   } catch (error) {
     console.log(`[Security] Error in antibot handler: ${error.message}`);
   }

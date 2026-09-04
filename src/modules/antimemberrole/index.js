@@ -16,8 +16,6 @@ const DANGEROUS_PERMISSIONS = [
   'ManagePermissions'
 ];
 
-const PROTECTED_ROLE_IDS = [];
-
 const RATE_LIMIT_WINDOW = 60000;
 const RATE_LIMIT_MAX = 5;
 
@@ -58,10 +56,6 @@ function isDangerousPermission(permission) {
   return DANGEROUS_PERMISSIONS.includes(permission);
 }
 
-function isProtectedRole(roleId) {
-  return PROTECTED_ROLE_IDS.includes(roleId);
-}
-
 function checkRateLimit(key) {
   const now = Date.now();
   const timestamps = roleChangeCache.get(key) || [];
@@ -84,10 +78,6 @@ function calculateRiskScore(executor, target, roles, eventType) {
     const dangerousPerms = permissions.filter(p => isDangerousPermission(p));
     risk += dangerousPerms.length * 25;
 
-    if (isProtectedRole(roleId)) {
-      risk += 40;
-    }
-
     if (dangerousPerms.includes('Administrator')) {
       risk += 100;
     }
@@ -101,13 +91,11 @@ function calculateRiskScore(executor, target, roles, eventType) {
 }
 
 export async function handleMemberUpdate(event, context) {
-  const { client, cache, database, incidentEngine, punishmentEngine, snapshotManager, auditCorrelator, whitelistManager, ownerManager } = context;
+  const { client, cache, database, incidentEngine, punishmentEngine, auditCorrelator, whitelistManager, ownerManager } = context;
 
   try {
-    const config = cache.get('config');
-    if (!config?.modules?.antimemberrole?.enabled) {
-      return;
-    }
+    const config = await database.getConfig(event.newMember.guild.id);
+    if (!config?.modules?.antimemberrole?.enabled) return;
 
     const { oldMember, newMember } = event;
     if (!oldMember || !newMember) return;
@@ -117,40 +105,26 @@ export async function handleMemberUpdate(event, context) {
 
     if (addedRoles.size === 0 && removedRoles.size === 0) return;
 
-    const auditLog = await auditCorrelator.getRecentAuditLogs(newMember.guild, {
-      type: 'MEMBER_ROLE_UPDATE',
-      limit: 5
-    });
+    const executorId = await auditCorrelator.resolveExecutor(newMember.guild, 'MEMBER_ROLE_UPDATE', newMember.id);
+    if (!executorId) return;
 
-    const executor = auditLog.entries.first()?.executor;
-    if (!executor) return;
+    if (await whitelistManager.isWhitelisted(newMember.guild.id, executorId)) return;
+    if (await ownerManager.isExtraOwner(newMember.guild.id, executorId)) return;
 
-    if (whitelistManager.isWhitelisted(executor.id)) return;
-    if (await ownerManager.isExtraOwner(executor.id)) return;
-
-    const rateLimitKey = `role_update_${executor.id}_${newMember.id}`;
+    const rateLimitKey = `role_update_${executorId}_${newMember.id}`;
     if (checkRateLimit(rateLimitKey)) {
-      console.log(`[Security] Rate limit exceeded for role changes: ${executor.id} -> ${newMember.id}`);
+      console.log(`[Security] Rate limit exceeded for role changes: ${executorId} -> ${newMember.id}`);
 
-      await punishmentEngine.apply(newMember.guild, {
-        type: 'TEMPBAN',
-        moderator: client.user,
-        reason: 'Mass role assignment detected - rate limit exceeded',
-        duration: 86400000,
-        target: newMember
-      });
-
-      await incidentEngine.log({
-        type: 'RATE_LIMIT_ROLE_CHANGE',
-        severity: 'HIGH',
-        executor: executor.id,
-        target: newMember.id,
-        guild: newMember.guild.id,
-        details: {
+      await Promise.all([
+        punishmentEngine.punish(newMember.guild.id, executorId, 'BAN', 'Luna: Mass role assignment detected').catch(e => {
+          console.log(`[Security] Failed to punish: ${e.message}`);
+          return null;
+        }),
+        incidentEngine.create(newMember.guild.id, 'antimemberrole', 'rate_limit_role_change', executorId, newMember.id, 'high', 80, {
           addedRoles: [...addedRoles.values()].map(r => r.id),
           removedRoles: [...removedRoles.values()].map(r => r.id)
-        }
-      });
+        }, 'ban')
+      ]);
       return;
     }
 
@@ -163,38 +137,25 @@ export async function handleMemberUpdate(event, context) {
         return perms.some(p => isDangerousPermission(p));
       });
 
-      const protectedAdded = addedRoles.filter(r => isProtectedRole(r.id));
+      if (dangerousAdded.size > 0) {
+        console.log(`[Security] Dangerous role assignment: ${executorId} assigned ${dangerousAdded.size} dangerous roles to ${newMember.id}`);
 
-      if (dangerousAdded.size > 0 || protectedAdded.size > 0) {
-        console.log(`[Security] Dangerous role assignment detected: ${executor.id} assigned ${dangerousAdded.size} dangerous roles to ${newMember.id}`);
+        const punishmentType = riskScore >= 80 ? 'BAN' : riskScore >= 50 ? 'TIMEOUT' : 'KICK';
 
-        const punishmentType = riskScore >= 80 ? 'BAN' : riskScore >= 50 ? 'TEMPBAN' : 'KICK';
-
-        await punishmentEngine.apply(newMember.guild, {
-          type: punishmentType,
-          moderator: client.user,
-          reason: `Unauthorized role assignment - Risk: ${riskScore}`,
-          duration: punishmentType === 'TEMPBAN' ? 86400000 : undefined,
-          target: newMember
-        });
-
-        await incidentEngine.log({
-          type: 'DANGEROUS_ROLE_ASSIGNMENT',
-          severity: riskScore >= 80 ? 'CRITICAL' : 'HIGH',
-          executor: executor.id,
-          target: newMember.id,
-          guild: newMember.guild.id,
-          riskScore,
-          details: {
+        await Promise.all([
+          punishmentEngine.punish(newMember.guild.id, executorId, punishmentType, `Luna: Unauthorized role assignment - Risk: ${riskScore}`).catch(e => {
+            console.log(`[Security] Failed to punish: ${e.message}`);
+            return null;
+          }),
+          incidentEngine.create(newMember.guild.id, 'antimemberrole', 'dangerous_role_assignment', executorId, newMember.id, riskScore >= 80 ? 'critical' : 'high', riskScore, {
             addedRoles: addedRoleIds,
             dangerousRoles: [...dangerousAdded.values()].map(r => ({
               id: r.id,
               name: r.name,
               permissions: getPermissionNames(r.permissions)
-            })),
-            protectedRoles: [...protectedAdded.values()].map(r => r.id)
-          }
-        });
+            }))
+          }, punishmentType)
+        ]);
       }
     }
 
@@ -202,23 +163,12 @@ export async function handleMemberUpdate(event, context) {
       const removedRoleIds = [...removedRoles.values()].map(r => r.id);
       const riskScore = calculateRiskScore(executor, newMember, removedRoleIds, 'REMOVE');
 
-      const protectedRemoved = removedRoles.filter(r => isProtectedRole(r.id));
+      if (riskScore >= 50) {
+        console.log(`[Security] Suspicious role removal: ${executorId} removed ${removedRoles.size} roles from ${newMember.id}`);
 
-      if (protectedRemoved.size > 0 || riskScore >= 50) {
-        console.log(`[Security] Suspicious role removal detected: ${executor.id} removed ${removedRoles.size} roles from ${newMember.id}`);
-
-        await incidentEngine.log({
-          type: 'SUSPICIOUS_ROLE_REMOVAL',
-          severity: 'MEDIUM',
-          executor: executor.id,
-          target: newMember.id,
-          guild: newMember.guild.id,
-          riskScore,
-          details: {
-            removedRoles: removedRoleIds,
-            protectedRoles: [...protectedRemoved.values()].map(r => r.id)
-          }
-        });
+        await incidentEngine.create(newMember.guild.id, 'antimemberrole', 'suspicious_role_removal', executorId, newMember.id, 'medium', riskScore, {
+          removedRoles: removedRoleIds
+        }, 'log');
       }
     }
   } catch (error) {
@@ -227,51 +177,35 @@ export async function handleMemberUpdate(event, context) {
 }
 
 export async function handleMemberAdd(event, context) {
-  const { client, cache, database, incidentEngine, punishmentEngine, snapshotManager, auditCorrelator, whitelistManager, ownerManager } = context;
+  const { client, cache, database, incidentEngine } = context;
 
   try {
-    const config = cache.get('config');
-    if (!config?.modules?.antimemberrole?.enabled) {
-      return;
-    }
+    const config = await database.getConfig(event.member.guild.id);
+    if (!config?.modules?.antimemberrole?.enabled) return;
 
     const { member } = event;
     if (!member) return;
 
-    const autoRoles = cache.get('autoRoles') || [];
+    const autoRoles = cache.get(member.guild.id).autoRoles || [];
     if (autoRoles.length === 0) return;
 
-    const dangerousAutoRoles = autoRoles.filter(roleId => {
+    for (const roleId of autoRoles) {
       const role = member.guild.roles.cache.get(roleId);
-      if (!role) return false;
+      if (!role) continue;
 
-      const permissions = getPermissionNames(role.permissions);
-      return permissions.some(p => isDangerousPermission(p));
-    });
+      const perms = getPermissionNames(role.permissions);
+      if (perms.some(p => isDangerousPermission(p))) {
+        console.log(`[Security] Dangerous auto-role on join: ${member.id} received ${role.name}`);
+        await member.roles.remove(roleId, 'Luna: Dangerous auto-role removal').catch(() => {});
 
-    if (dangerousAutoRoles.length > 0) {
-      console.log(`[Security] Dangerous auto-role assigned on join: ${member.id} received ${dangerousAutoRoles.length} dangerous roles`);
-
-      for (const roleId of dangerousAutoRoles) {
-        try {
-          await member.roles.remove(roleId, 'Luna: Dangerous auto-role removal');
-        } catch (err) {
-          console.log(`[Security] Failed to remove dangerous auto-role ${roleId}: ${err.message}`);
-        }
-      }
-
-      await incidentEngine.log({
-        type: 'DANGEROUS_AUTO_ROLE',
-        severity: 'HIGH',
-        target: member.id,
-        guild: member.guild.id,
-        details: {
-          dangerousRoles: dangerousAutoRoles,
+        await incidentEngine.create(member.guild.id, 'antimemberrole', 'dangerous_auto_role', member.id, member.id, 'high', 60, {
+          roleId,
+          roleName: role.name,
           autoRoles
-        }
-      });
+        }, 'remove_role');
+      }
     }
   } catch (error) {
-    console.log(`[Security] Error in antimemberrole member add handler: ${error.message}`);
+    console.log(`[Security] Error in antimemberrole member add: ${error.message}`);
   }
 }

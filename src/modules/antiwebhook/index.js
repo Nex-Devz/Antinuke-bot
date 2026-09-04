@@ -1,5 +1,5 @@
 export async function handleWebhookUpdate(event, context) {
-  const { client, cache, database, incidentEngine, punishmentEngine, snapshotManager, auditCorrelator, whitelistManager, ownerManager } = context;
+  const { client, cache, database, incidentEngine, punishmentEngine, auditCorrelator, whitelistManager, ownerManager } = context;
   const guild = event.guild;
   if (!guild) return;
   const guildId = guild.id;
@@ -13,25 +13,36 @@ export async function handleWebhookUpdate(event, context) {
   for (const [, webhook] of webhooks) {
     const executorId = await auditCorrelator.resolveExecutor(guild, 'WEBHOOK_CREATE', webhook.id);
 
-    if (executorId) {
-      if (await whitelistManager.isWhitelisted(guildId, executorId)) return;
-      if (await ownerManager.isExtraOwner(guildId, executorId)) return;
+    if (!executorId) continue;
+    if (await whitelistManager.isWhitelisted(guildId, executorId)) return;
+    if (await ownerManager.isExtraOwner(guildId, executorId)) return;
 
-      console.log(`[Security] Webhook created: ${webhook.name} in ${guild.name} by ${executorId}`);
+    console.log(`[Security] Webhook created: ${webhook.name} in ${guild.name} by ${executorId}`);
 
-      const risk = 75;
-      const actions = config.modules.antiwebhook.actions || {};
+    const actions = config.modules.antiwebhook.actions || {};
+    const reason = `Luna: Unauthorized webhook creation: ${webhook.name}`;
 
-      if (actions.delete) {
-        await webhook.delete('Luna: Unauthorized webhook creation').catch(e => console.log(`[Security] Failed to delete webhook: ${e.message}`));
-        console.log(`[Security] Deleted unauthorized webhook: ${webhook.name}`);
-      }
+    const tasks = [];
 
-      if (actions.punish) {
-        await punishmentEngine.punish(guildId, executorId, actions.punish, `Unauthorized webhook creation: ${webhook.name}`);
-      }
-
-      await incidentEngine.create(guildId, 'antiWebhook', 'webhook_create', executorId, webhook.id, 'critical', risk, { webhookName: webhook.name }, 'delete_and_punish');
+    if (actions.delete) {
+      tasks.push(webhook.delete(reason).catch(e => {
+        console.log(`[Security] Failed to delete webhook: ${e.message}`);
+        return null;
+      }));
     }
+
+    if (actions.punish) {
+      tasks.push(punishmentEngine.punish(guildId, executorId, actions.punish, reason).catch(e => {
+        console.log(`[Security] Failed to punish ${executorId}: ${e.message}`);
+        return null;
+      }));
+    }
+
+    tasks.push(incidentEngine.create(guildId, 'antiwebhook', 'webhook_create', executorId, webhook.id, 'critical', 75, {
+      webhookName: webhook.name
+    }, 'delete_and_punish'));
+
+    await Promise.all(tasks);
+    return;
   }
 }

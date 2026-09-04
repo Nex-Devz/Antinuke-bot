@@ -22,75 +22,68 @@ function pruneTimestamps(arr, windowMs) {
   }
 }
 
-function isWhitelisted(context, userId, guildId) {
-  if (context.whitelistManager?.isWhitelisted(userId, guildId)) return true;
-  if (context.ownerManager?.isExtraOwner(userId, guildId)) return true;
-  return false;
-}
-
-function buildInviteState(invite) {
-  return {
-    code: invite.code,
-    guildId: invite.guild?.id,
-    channelId: invite.channel?.id,
-    inviterId: invite.inviter?.id,
-    roleIds: invite.roles?.map((r) => r.id ?? r) ?? [],
-    uses: invite.uses ?? 0,
-    maxUses: invite.maxUses ?? 0,
-    maxAge: invite.maxAge ?? 0,
-    createdAt: invite.createdTimestamp ?? Date.now(),
-  };
-}
-
 export async function handleInviteCreate(event, context) {
-  const { client, cache, incidentEngine, punishmentEngine } = context;
+  const { client, cache, database, incidentEngine, punishmentEngine, whitelistManager, ownerManager } = context;
   const { guild, invite } = event;
   if (!guild || !invite) return;
 
-  if (!cache.moduleState?.antiInvite?.enabled) return;
+  const config = await database.getConfig(guild.id);
+  if (!config?.modules?.antiinvite?.enabled) return;
 
   const inviterId = invite.inviter?.id;
   if (!inviterId) return;
-  if (isWhitelisted(context, inviterId, guild.id)) return;
+  if (await whitelistManager.isWhitelisted(guild.id, inviterId)) return;
+  if (await ownerManager.isExtraOwner(guild.id, inviterId)) return;
 
   const tracker = getInviteTracker(cache, guild.id);
   const now = Date.now();
   tracker.createTimestamps.push(now);
   pruneTimestamps(tracker.createTimestamps, RATE_WINDOW);
 
-  const state = buildInviteState(invite);
-  tracker.inviteCache.set(invite.code, state);
+  tracker.inviteCache.set(invite.code, {
+    code: invite.code,
+    guildId: guild.id,
+    inviterId,
+    channelId: invite.channel?.id,
+    roleIds: invite.roles?.map(r => r.id ?? r) ?? [],
+    uses: invite.uses ?? 0,
+    maxUses: invite.maxUses ?? 0,
+    maxAge: invite.maxAge ?? 0,
+    createdAt: invite.createdTimestamp ?? Date.now(),
+  });
 
   const count = tracker.createTimestamps.length;
   if (count >= INVITE_CREATE_THRESHOLD) {
     const risk = Math.min(100, 60 + count * 5);
-    console.log(`[Security] Invite creation spam detected in ${guild.name} (${guild.id}) by ${inviterId}: ${count} invites in ${RATE_WINDOW / 1000}s`);
+    console.log(`[Security] Invite spam in ${guild.name} by ${inviterId}: ${count} in ${RATE_WINDOW / 1000}s`);
 
-    await punishmentEngine?.punish(guild, inviterId, 'invite_create_spam', {
-      risk,
-      reason: `${count} invites created in rapid succession`,
-      duration: '1h',
-    });
-
-    await incidentEngine?.log({
-      type: 'invite_create_spam',
-      guildId: guild.id,
-      userId: inviterId,
-      risk,
-      details: { inviteCount: count, windowMs: RATE_WINDOW, code: invite.code },
-    });
+    await Promise.all([
+      punishmentEngine.punish(guild.id, inviterId, 'KICK', `Luna: ${count} invites created in rapid succession`).catch(e => {
+        console.log(`[Security] Failed to punish inviter: ${e.message}`);
+        return null;
+      }),
+      incidentEngine.create(guild.id, 'antiinvite', 'invite_create_spam', inviterId, inviterId, 'high', risk, {
+        inviteCount: count,
+        windowMs: RATE_WINDOW,
+        code: invite.code
+      }, 'kick')
+    ]);
   }
 }
 
 export async function handleInviteDelete(event, context) {
-  const { client, cache, incidentEngine, punishmentEngine } = context;
+  const { client, cache, database, incidentEngine, punishmentEngine, whitelistManager, ownerManager } = context;
   const { guild, invite } = event;
   if (!guild || !invite) return;
 
-  if (!cache.moduleState?.antiInvite?.enabled) return;
+  const config = await database.getConfig(guild.id);
+  if (!config?.modules?.antiinvite?.enabled) return;
 
   const deleterId = event.userId;
-  if (deleterId && isWhitelisted(context, deleterId, guild.id)) return;
+  if (deleterId) {
+    if (await whitelistManager.isWhitelisted(guild.id, deleterId)) return;
+    if (await ownerManager.isExtraOwner(guild.id, deleterId)) return;
+  }
 
   const tracker = getInviteTracker(cache, guild.id);
   const now = Date.now();
@@ -104,20 +97,18 @@ export async function handleInviteDelete(event, context) {
   if (count >= INVITE_DELETE_THRESHOLD) {
     const targetUserId = deleterId || cachedState?.inviterId || 'unknown';
     const risk = Math.min(100, 65 + count * 5);
-    console.log(`[Security] Invite deletion spam detected in ${guild.name} (${guild.id}) by ${targetUserId}: ${count} deletions in ${RATE_WINDOW / 1000}s`);
+    console.log(`[Security] Invite delete spam in ${guild.name} by ${targetUserId}: ${count} in ${RATE_WINDOW / 1000}s`);
 
-    await punishmentEngine?.punish(guild, targetUserId, 'invite_delete_spam', {
-      risk,
-      reason: `${count} invites deleted in rapid succession`,
-      duration: '1h',
-    });
-
-    await incidentEngine?.log({
-      type: 'invite_delete_spam',
-      guildId: guild.id,
-      userId: targetUserId,
-      risk,
-      details: { deletionCount: count, windowMs: RATE_WINDOW, code: invite.code, cachedState },
-    });
+    await Promise.all([
+      punishmentEngine.punish(guild.id, targetUserId, 'KICK', `Luna: ${count} invites deleted in rapid succession`).catch(e => {
+        console.log(`[Security] Failed to punish: ${e.message}`);
+        return null;
+      }),
+      incidentEngine.create(guild.id, 'antiinvite', 'invite_delete_spam', targetUserId, targetUserId, 'high', risk, {
+        deletionCount: count,
+        windowMs: RATE_WINDOW,
+        code: invite.code
+      }, 'kick')
+    ]);
   }
 }

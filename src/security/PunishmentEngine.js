@@ -4,7 +4,7 @@ export class PunishmentEngine {
     this.cache = cache;
   }
 
-  async #canAct(guild, executorId, targetMember) {
+  async #canAct(guild, executorId, member) {
     const botMember = guild.members.me;
     const guildOwner = guild.ownerId;
 
@@ -12,11 +12,11 @@ export class PunishmentEngine {
       return { allowed: false, error: 'Target is the guild owner' };
     }
 
-    if (targetMember && targetMember.id === this.client.user.id) {
+    if (member && member.id === this.client.user.id) {
       return { allowed: false, error: 'Cannot punish the bot itself' };
     }
 
-    if (targetMember && botMember.roles.highest.position <= targetMember.roles.highest.position) {
+    if (member && botMember.roles.highest.position <= member.roles.highest.position) {
       return { allowed: false, error: 'Role hierarchy prevents this action' };
     }
 
@@ -25,14 +25,14 @@ export class PunishmentEngine {
 
   async #fetchGuildAndMember(guildId, executorId) {
     const guild = this.client.guilds.cache.get(guildId);
-    if (!guild) return { error: 'Guild not found' };
+    if (!guild) return { guild: null, member: null, error: 'Guild not found' };
 
     const id = String(executorId || '');
     if (!id || id === 'unknown' || id === '[object Object]') return { guild, member: null };
 
     let member = null;
     try {
-      member = await guild.members.fetch(id).catch(() => null);
+      member = guild.members.cache.get(id) || await guild.members.fetch(id).catch(() => null);
     } catch {
       member = null;
     }
@@ -66,7 +66,6 @@ export class PunishmentEngine {
         case 'QUARANTINE':
           return await this.#quarantine(guild, member);
         case 'NONE':
-          console.log(`[Security] No action taken for ${executorId}: NONE selected`);
           return { success: true, error: null };
         default:
           return { success: false, error: `Unknown action: ${action}` };
@@ -78,7 +77,16 @@ export class PunishmentEngine {
   }
 
   async #ban(guild, member, reason) {
-    if (!member) return { success: false, error: 'Member not found in guild' };
+    if (!member) {
+      // Try banning by ID directly (faster, no member fetch needed)
+      try {
+        await guild.members.ban(reason ? `${reason}` : 'Luna: Unauthorized action', { deleteMessageSeconds: 0 });
+        console.log(`[Security] Banned user by ID`);
+        return { success: true, error: null };
+      } catch {
+        return { success: false, error: 'Member not found' };
+      }
+    }
     try {
       await guild.members.ban(member, { reason });
       console.log(`[Security] Banned ${member.user?.tag || member.id}`);
@@ -89,7 +97,7 @@ export class PunishmentEngine {
   }
 
   async #kick(guild, member, reason) {
-    if (!member) return { success: false, error: 'Member not found in guild' };
+    if (!member) return { success: false, error: 'Member not found' };
     try {
       await member.kick(reason);
       console.log(`[Security] Kicked ${member.user?.tag || member.id}`);
@@ -100,12 +108,11 @@ export class PunishmentEngine {
   }
 
   async #timeout(guild, member, reason) {
-    if (!member) return { success: false, error: 'Member not found in guild' };
+    if (!member) return { success: false, error: 'Member not found' };
     try {
-      const duration = this.cache?.get?.(`${guild.id}:timeout_duration`) ?? 600000;
-      const until = new Date(Date.now() + duration);
+      const duration = 600000;
       await member.timeout(duration, reason);
-      console.log(`[Security] Timed out ${member.user?.tag || member.id} until ${until.toISOString()}`);
+      console.log(`[Security] Timed out ${member.user?.tag || member.id}`);
       return { success: true, error: null };
     } catch (err) {
       return this.#handleDiscordError(err);
@@ -120,7 +127,6 @@ export class PunishmentEngine {
       );
 
       if (removableRoles.size === 0) {
-        console.log(`[Security] No removable roles for ${member.user?.tag || member.id}`);
         return { success: true, error: null };
       }
 
@@ -150,7 +156,6 @@ export class PunishmentEngine {
       });
 
       if (rolesToRemove.size === 0) {
-        console.log(`[Security] No dangerous roles to remove for ${member.user?.tag || member.id}`);
         return { success: true, error: null };
       }
 
@@ -169,13 +174,12 @@ export class PunishmentEngine {
       );
 
       if (!quarantineChannel) {
-        console.log(`[Security] No quarantine channel found in ${guild.name}`);
         return { success: false, error: 'No quarantine channel found' };
       }
 
       await member.roles.set([], 'Luna: Quarantine');
       await member.voice.disconnect('Luna: Quarantine').catch(() => {});
-      console.log(`[Security] Quarantined ${member.user?.tag || member.id} in ${quarantineChannel.name}`);
+      console.log(`[Security] Quarantined ${member.user?.tag || member.id}`);
       return { success: true, error: null };
     } catch (err) {
       return this.#handleDiscordError(err);
@@ -184,15 +188,12 @@ export class PunishmentEngine {
 
   #handleDiscordError(err) {
     if (err.httpStatus === 403 || err.code === 50013) {
-      console.log(`[Security] Missing permissions: ${err.message}`);
       return { success: false, error: 'Missing permissions' };
     }
     if (err.httpStatus === 404 || err.code === 10007 || err.code === 10009) {
-      console.log(`[Security] Resource not found: ${err.message}`);
-      return { success: false, error: 'User or resource not found' };
+      return { success: false, error: 'User not found' };
     }
     if (err.code === 40002) {
-      console.log(`[Security] Cannot act on guild owner: ${err.message}`);
       return { success: false, error: 'Cannot act on guild owner' };
     }
     console.error(`[Security] Discord API error:`, err.message);

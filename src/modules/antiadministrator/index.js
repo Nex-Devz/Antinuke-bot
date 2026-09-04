@@ -58,13 +58,11 @@ function analyzePermissionChange(oldPermissions, newPermissions) {
 }
 
 export async function handleRoleUpdate(event, context) {
-  const { client, cache, database, incidentEngine, punishmentEngine, snapshotManager, auditCorrelator, whitelistManager, ownerManager } = context;
+  const { client, cache, database, incidentEngine, punishmentEngine, auditCorrelator, whitelistManager, ownerManager } = context;
 
   try {
-    const config = cache.get('config');
-    if (!config?.modules?.antiadministrator?.enabled) {
-      return;
-    }
+    const config = await database.getConfig(event.newRole.guild.id);
+    if (!config?.modules?.antiadministrator?.enabled) return;
 
     const { oldRole, newRole } = event;
     if (!oldRole || !newRole) return;
@@ -73,67 +71,51 @@ export async function handleRoleUpdate(event, context) {
 
     const analysis = analyzePermissionChange(oldRole.permissions, newRole.permissions);
 
-    if (!analysis.hasAdminAdded && !analysis.added.some(p => CRITICAL_PERMISSIONS.includes(p))) {
-      return;
-    }
+    if (!analysis.hasAdminAdded && !analysis.added.some(p => CRITICAL_PERMISSIONS.includes(p))) return;
 
-    const auditLog = await auditCorrelator.getRecentAuditLogs(newRole.guild, {
-      type: 'ROLE_UPDATE',
-      limit: 5
-    });
+    const executorId = await auditCorrelator.resolveExecutor(newRole.guild, 'ROLE_UPDATE', newRole.id);
+    if (!executorId) return;
 
-    const executor = auditLog.entries.first()?.executor;
-    if (!executor) return;
+    if (await whitelistManager.isWhitelisted(newRole.guild.id, executorId)) return;
+    if (await ownerManager.isExtraOwner(newRole.guild.id, executorId)) return;
 
-    if (whitelistManager.isWhitelisted(executor.id)) return;
-    if (await ownerManager.isExtraOwner(executor.id)) return;
+    console.log(`[Security] CRITICAL: Administrator permission escalation on role ${newRole.name} in ${newRole.guild.name} by ${executorId}`);
 
-    console.log(`[Security] CRITICAL: Administrator permission escalation detected on role ${newRole.name} in ${newRole.guild.name}`);
+    const reason = `Luna: Unauthorized Administrator permission escalation on role: ${newRole.name}`;
 
-    await punishmentEngine.apply(newRole.guild, {
-      type: 'BAN',
-      moderator: client.user,
-      reason: `Unauthorized Administrator permission escalation on role: ${newRole.name}`,
-      target: executor
-    });
-
-    await incidentEngine.log({
-      type: 'ADMINISTRATOR_ESCALATION',
-      severity: 'CRITICAL',
-      executor: executor.id,
-      guild: newRole.guild.id,
-      details: {
+    await Promise.all([
+      punishmentEngine.punish(newRole.guild.id, executorId, 'BAN', reason).catch(e => {
+        console.log(`[Security] Failed to punish ${executorId}: ${e.message}`);
+        return null;
+      }),
+      incidentEngine.create(newRole.guild.id, 'antiadministrator', 'role_update', executorId, newRole.id, 'critical', 95, {
         roleId: newRole.id,
         roleName: newRole.name,
         previousPermissions: getPermissionNames(oldRole.permissions),
         currentPermissions: getPermissionNames(newRole.permissions),
-        addedPermissions: analysis.added,
-        removedPermissions: analysis.removed
-      }
-    });
+        addedPermissions: analysis.added
+      }, 'ban_and_revert')
+    ]);
 
     if (analysis.hasAdminAdded) {
       try {
-        const revertPermissions = oldRole.permissions;
-        await newRole.setPermissions(revertPermissions, 'Luna: Reverting unauthorized Administrator permission');
+        await newRole.setPermissions(oldRole.permissions, 'Luna: Reverting unauthorized Administrator permission');
         console.log(`[Security] Reverted Administrator permission on role ${newRole.name}`);
       } catch (error) {
-        console.log(`[Security] Failed to revert Administrator permission: ${error.message}`);
+        console.log(`[Security] Failed to revert: ${error.message}`);
       }
     }
   } catch (error) {
-    console.log(`[Security] Error in antiadministrator role update handler: ${error.message}`);
+    console.log(`[Security] Error in antiadministrator role update: ${error.message}`);
   }
 }
 
 export async function handleMemberUpdate(event, context) {
-  const { client, cache, database, incidentEngine, punishmentEngine, snapshotManager, auditCorrelator, whitelistManager, ownerManager } = context;
+  const { client, cache, database, incidentEngine, punishmentEngine, auditCorrelator, whitelistManager, ownerManager } = context;
 
   try {
-    const config = cache.get('config');
-    if (!config?.modules?.antiadministrator?.enabled) {
-      return;
-    }
+    const config = await database.getConfig(event.newMember.guild.id);
+    if (!config?.modules?.antiadministrator?.enabled) return;
 
     const { oldMember, newMember } = event;
     if (!oldMember || !newMember) return;
@@ -141,73 +123,41 @@ export async function handleMemberUpdate(event, context) {
     const addedRoles = newMember.roles.cache.filter(r => !oldMember.roles.cache.has(r.id));
     if (addedRoles.size === 0) return;
 
-    const auditLog = await auditCorrelator.getRecentAuditLogs(newMember.guild, {
-      type: 'MEMBER_ROLE_UPDATE',
-      limit: 5
-    });
+    const executorId = await auditCorrelator.resolveExecutor(newMember.guild, 'MEMBER_ROLE_UPDATE', newMember.id);
+    if (!executorId) return;
 
-    const executor = auditLog.entries.first()?.executor;
-    if (!executor) return;
-
-    if (whitelistManager.isWhitelisted(executor.id)) return;
-    if (await ownerManager.isExtraOwner(executor.id)) return;
+    if (await whitelistManager.isWhitelisted(newMember.guild.id, executorId)) return;
+    if (await ownerManager.isExtraOwner(newMember.guild.id, executorId)) return;
 
     for (const [, role] of addedRoles) {
       if (hasAdministratorPermission(role.permissions)) {
-        console.log(`[Security] CRITICAL: Administrator role assigned to ${newMember.id} by ${executor.id}`);
+        console.log(`[Security] CRITICAL: Administrator role assigned to ${newMember.id} by ${executorId}`);
 
-        await punishmentEngine.apply(newMember.guild, {
-          type: 'BAN',
-          moderator: client.user,
-          reason: `Unauthorized Administrator role assignment: ${role.name}`,
-          target: newMember
-        });
+        const reason = `Luna: Unauthorized Administrator role assignment: ${role.name}`;
 
-        await incidentEngine.log({
-          type: 'ADMINISTRATOR_ROLE_ASSIGNMENT',
-          severity: 'CRITICAL',
-          executor: executor.id,
-          target: newMember.id,
-          guild: newMember.guild.id,
-          details: {
+        await Promise.all([
+          punishmentEngine.punish(newMember.guild.id, executorId, 'BAN', reason).catch(e => {
+            console.log(`[Security] Failed to punish ${executorId}: ${e.message}`);
+            return null;
+          }),
+          incidentEngine.create(newMember.guild.id, 'antiadministrator', 'member_role_update', executorId, newMember.id, 'critical', 95, {
             roleId: role.id,
             roleName: role.name,
             rolePermissions: getPermissionNames(role.permissions)
-          }
-        });
+          }, 'ban_and_remove_role')
+        ]);
 
         try {
           await newMember.roles.remove(role.id, 'Luna: Removing unauthorized Administrator role');
           console.log(`[Security] Removed Administrator role ${role.name} from ${newMember.id}`);
         } catch (error) {
-          console.log(`[Security] Failed to remove Administrator role: ${error.message}`);
+          console.log(`[Security] Failed to remove role: ${error.message}`);
         }
 
         return;
       }
-
-      const rolePermissions = getPermissionNames(role.permissions);
-      const criticalPerms = rolePermissions.filter(p => CRITICAL_PERMISSIONS.includes(p));
-
-      if (criticalPerms.length > 0) {
-        console.log(`[Security] High risk role assignment: ${executor.id} assigned role with critical permissions to ${newMember.id}`);
-
-        await incidentEngine.log({
-          type: 'CRITICAL_ROLE_ASSIGNMENT',
-          severity: 'HIGH',
-          executor: executor.id,
-          target: newMember.id,
-          guild: newMember.guild.id,
-          details: {
-            roleId: role.id,
-            roleName: role.name,
-            criticalPermissions: criticalPerms,
-            allPermissions: rolePermissions
-          }
-        });
-      }
     }
   } catch (error) {
-    console.log(`[Security] Error in antiadministrator member update handler: ${error.message}`);
+    console.log(`[Security] Error in antiadministrator member update: ${error.message}`);
   }
 }

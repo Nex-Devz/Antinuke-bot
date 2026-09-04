@@ -1,59 +1,62 @@
-export async function handleMessageCreate(event, context) {
-  const { client, cache, database, incidentEngine, punishmentEngine, snapshotManager, auditCorrelator, whitelistManager, ownerManager } = context;
-  const config = await database.getConfig(event.guild.id);
+export async function handleMessageCreate(message, context) {
+  const { client, cache, database, incidentEngine, punishmentEngine, whitelistManager, ownerManager } = context;
+
+  if (!message.guild) return;
+
+  const config = await database.getConfig(message.guild.id);
   if (!config?.modules?.antimassmention?.enabled) return;
 
-  if (await whitelistManager.isWhitelisted(event.guild.id, event.author.id)) return;
-  if (await ownerManager.isExtraOwner(event.guild.id, event.author.id)) return;
+  if (await whitelistManager.isWhitelisted(message.guild.id, message.author.id)) return;
+  if (await ownerManager.isExtraOwner(message.guild.id, message.author.id)) return;
 
-  const mentions = event.mentions;
-  if (!mentions || mentions.length === 0) return;
+  const mentions = message.mentions;
+  if (!mentions || mentions.users.size === 0) return;
 
-  const hasEveryoneMention = event.content.includes('@everyone') || event.content.includes('@here');
+  const hasEveryoneMention = message.content.includes('@everyone') || message.content.includes('@here');
 
-  const tracker = cache.get(event.guild.id).massMentionTracker || {};
-  if (!tracker[event.channel.id]) {
-    tracker[event.channel.id] = [];
+  const state = cache.get(message.guild.id);
+  if (!state.massMentionTracker) state.massMentionTracker = {};
+
+  const channelId = message.channel.id;
+  if (!state.massMentionTracker[channelId]) {
+    state.massMentionTracker[channelId] = [];
   }
 
   const now = Date.now();
   const window = config.modules.antimassmention.window || 10000;
   const threshold = config.modules.antimassmention.threshold || 5;
 
-  tracker[event.channel.id].push({ timestamp: now, authorId: event.author.id, hasEveryoneMention });
-  tracker[event.channel.id] = tracker[event.channel.id].filter(entry => now - entry.timestamp < window);
+  state.massMentionTracker[channelId].push({ timestamp: now, authorId: message.author.id, hasEveryoneMention });
+  state.massMentionTracker[channelId] = state.massMentionTracker[channelId].filter(entry => now - entry.timestamp < window);
 
-  const everyoneMentions = tracker[event.channel.id].filter(entry => entry.hasEveryoneMention);
-  const rateLimitKey = `massmention:${event.channel.id}`;
-  const recent = cache.checkRateLimit(event.guild.id, rateLimitKey, threshold, window);
+  const everyoneMentions = state.massMentionTracker[channelId].filter(entry => entry.hasEveryoneMention);
 
-  if (recent && everyoneMentions.length >= threshold) {
-    const risk = calculateMassMentionRisk(everyoneMentions, threshold);
-    console.log(`[Security] Mass mention abuse detected in ${event.guild.name} (risk: ${risk})`);
+  if (everyoneMentions.length >= threshold) {
+    const risk = Math.min(20 + everyoneMentions.length * 10, 100);
+    console.log(`[Security] Mass mention abuse in ${message.guild.name} (risk: ${risk})`);
 
     try {
-      await event.message.delete();
-      console.log(`[Security] Deleted message from ${event.author.tag} in ${event.guild.name}`);
-    } catch (err) {
-      console.log(`[Security] Failed to delete message in ${event.guild.name}: ${err.message}`);
-    }
+      await message.delete();
+    } catch {}
 
-    const action = config.modules.antimassmention.actions?.punish || 'timeout';
-    await punishmentEngine.punish(event.guild.id, event.author.id, 'mass_mention_spam', action);
-    await incidentEngine.create(event.guild.id, 'antimassmention', 'mass_mention', event.author.id, event.channel.id, 'high', risk, { mentionCount: everyoneMentions.length, window, threshold }, 'delete_and_punish');
+    const punishAction = config.modules.antimassmention.actions?.punish || 'TIMEOUT';
+
+    await Promise.all([
+      punishmentEngine.punish(message.guild.id, message.author.id, punishAction, 'Luna: Mass mention abuse').catch(e => {
+        console.log(`[Security] Failed to punish: ${e.message}`);
+        return null;
+      }),
+      incidentEngine.create(message.guild.id, 'antimassmention', 'mass_mention', message.author.id, message.channel.id, 'high', risk, {
+        mentionCount: everyoneMentions.length,
+        window,
+        threshold
+      }, 'delete_and_punish')
+    ]);
   } else if (everyoneMentions.length >= Math.floor(threshold / 2)) {
-    const risk = 30;
-    await incidentEngine.create(event.guild.id, 'antimassmention', 'mass_mention_warning', event.author.id, event.channel.id, 'warning', risk, { mentionCount: everyoneMentions.length, window, threshold }, 'log_only');
+    await incidentEngine.create(message.guild.id, 'antimassmention', 'mass_mention_warning', message.author.id, message.channel.id, 'warning', 30, {
+      mentionCount: everyoneMentions.length,
+      window,
+      threshold
+    }, 'log_only');
   }
-
-  console.log(`[Security] Message created by ${event.author.tag} in ${event.guild.name} (mentions: ${mentions.length})`);
-}
-
-function calculateMassMentionRisk(mentions, threshold) {
-  let risk = 20;
-  const count = mentions.length;
-  if (count >= threshold) risk += 30;
-  if (count >= threshold * 2) risk += 30;
-  if (count >= threshold * 3) risk += 15;
-  return Math.min(risk, 100);
 }

@@ -18,10 +18,13 @@ export async function handleStickerCreate(event, context) {
   const reason = 'Luna: Unauthorized sticker creation';
 
   await Promise.all([
-    snapshotManager.takeStickerSnapshot(guildId, event.sticker.id),
+    snapshotManager.takeStickerSnapshot?.(guildId, event.sticker.id),
     actions.restore ? event.sticker.delete(reason).catch(() => null) : null,
-    actions.punish ? punishmentEngine.punish(guildId, executorId, actions.punish, reason) : null,
-    incidentEngine.create(guildId, 'antisticker', 'sticker_create', executorId, event.sticker.id, 'critical', 70, { sticker: event.sticker.name }, 'delete_and_punish')
+    actions.punish ? punishmentEngine.punish(guildId, executorId, actions.punish, reason).catch(e => {
+      console.log(`[Security] Failed to punish: ${e.message}`);
+      return null;
+    }) : null,
+    incidentEngine.create(guildId, 'antisticker', 'sticker_create', executorId, event.sticker.id, 'critical', 70, { stickerName: event.sticker.name }, 'delete_and_punish')
   ]);
 }
 
@@ -45,18 +48,22 @@ export async function handleStickerDelete(event, context) {
   const reason = 'Luna: Unauthorized sticker deletion';
 
   const tasks = [
-    actions.punish ? punishmentEngine.punish(guildId, executorId, actions.punish, reason) : null,
+    actions.punish ? punishmentEngine.punish(guildId, executorId, actions.punish, reason).catch(e => {
+      console.log(`[Security] Failed to punish: ${e.message}`);
+      return null;
+    }) : null,
     incidentEngine.create(guildId, 'antisticker', 'sticker_delete', executorId, event.stickerId, 'critical', 70, { stickerName: event.sticker?.name }, 'restore_and_punish')
   ];
 
   if (actions.restore) {
+    const snapKey = `sticker:${event.stickerId}`;
     tasks.push(
-      snapshotManager.getSnapshot(guildId, `sticker:${event.stickerId}`).then(async (snapshot) => {
+      snapshotManager.getSnapshot(guildId, snapKey).then(async (snapshot) => {
         if (snapshot) {
-          await snapshotManager.restoreSticker(guildId, snapshot).catch(() => null);
+          await snapshotManager.restoreSticker(guildId, snapshot);
           console.log(`[Security] Restored sticker: ${snapshot.name}`);
         }
-      })
+      }).catch(() => null)
     );
   }
 
@@ -82,7 +89,10 @@ export async function handleStickerUpdate(event, context) {
   const actions = config.modules.antisticker.actions || {};
 
   await Promise.all([
-    actions.punish ? punishmentEngine.punish(guildId, executorId, actions.punish, 'Luna: Unauthorized sticker update') : null,
+    actions.punish ? punishmentEngine.punish(guildId, executorId, actions.punish, 'Luna: Unauthorized sticker update').catch(e => {
+      console.log(`[Security] Failed to punish: ${e.message}`);
+      return null;
+    }) : null,
     incidentEngine.create(guildId, 'antisticker', 'sticker_update', executorId, event.sticker.id, 'medium', 50, { stickerName: event.sticker.name }, 'log_only')
   ]);
 }

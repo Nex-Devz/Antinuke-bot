@@ -1,6 +1,5 @@
 const DEFAULT_RAID_THRESHOLD = 10;
 const DEFAULT_RAID_WINDOW = 10_000;
-const DEFAULT_LOCKDOWN_SENSITIVITY = 0.5;
 
 function getRaidTracker(cache, guildId) {
   const key = 'antiRaid';
@@ -9,7 +8,6 @@ function getRaidTracker(cache, guildId) {
     cache[key][guildId] = {
       joinTimestamps: [],
       isLockdown: false,
-      lockdownSensitivity: DEFAULT_LOCKDOWN_SENSITIVITY,
       lastRaidDetected: 0,
     };
   }
@@ -40,17 +38,18 @@ function calculateMemberRisk(member) {
 }
 
 export async function handleMemberAdd(event, context) {
-  const { client, cache, incidentEngine, punishmentEngine } = context;
+  const { client, cache, database, incidentEngine, punishmentEngine } = context;
   const { guild, member } = event;
   if (!guild || !member) return;
 
-  if (!cache.moduleState?.antiRaid?.enabled) return;
+  const config = await database.getConfig(guild.id);
+  if (!config?.modules?.antiraid?.enabled) return;
 
   const tracker = getRaidTracker(cache, guild.id);
   const now = Date.now();
 
-  const threshold = cache.moduleState?.antiRaid?.threshold ?? DEFAULT_RAID_THRESHOLD;
-  const windowMs = cache.moduleState?.antiRaid?.windowMs ?? DEFAULT_RAID_WINDOW;
+  const threshold = config?.modules?.antiraid?.threshold ?? DEFAULT_RAID_THRESHOLD;
+  const windowMs = config?.modules?.antiraid?.windowMs ?? DEFAULT_RAID_WINDOW;
 
   tracker.joinTimestamps.push(now);
   pruneTimestamps(tracker.joinTimestamps, windowMs);
@@ -59,71 +58,45 @@ export async function handleMemberAdd(event, context) {
 
   if (joinCount >= threshold) {
     const risk = Math.min(100, 70 + joinCount * 2);
-    console.log(`[Security] Raid detected in ${guild.name} (${guild.id}): ${joinCount} joins in ${windowMs / 1000}s`);
+    console.log(`[Security] Raid detected in ${guild.name}: ${joinCount} joins in ${windowMs / 1000}s`);
 
     tracker.isLockdown = true;
-    tracker.lockdownSensitivity = Math.min(1, tracker.lockdownSensitivity + 0.1);
     tracker.lastRaidDetected = now;
 
     const memberRisk = calculateMemberRisk(member);
+    const punishment = risk >= 80 ? 'BAN' : risk >= 60 ? 'TIMEOUT' : 'KICK';
 
-    await punishmentEngine?.punish(guild, member.id, 'raid_join', {
-      risk: Math.max(risk, memberRisk),
-      reason: `Raid pattern detected: ${joinCount} members joined in ${windowMs / 1000}s`,
-      duration: '30m',
-    });
-
-    await incidentEngine?.log({
-      type: 'raid_detected',
-      guildId: guild.id,
-      userId: member.id,
-      risk,
-      action: 'LOCKDOWN',
-      details: {
+    await Promise.all([
+      punishmentEngine.punish(guild.id, member.id, punishment, `Luna: Raid pattern detected: ${joinCount} joins in ${windowMs / 1000}s`).catch(e => {
+        console.log(`[Security] Failed to punish raid joiner: ${e.message}`);
+        return null;
+      }),
+      incidentEngine.create(guild.id, 'antiraid', 'raid_detected', member.id, member.id, 'critical', risk, {
         joinCount,
         windowMs,
-        threshold,
-        lockdownSensitivity: tracker.lockdownSensitivity,
-        memberAccountAge: now - member.user.createdTimestamp,
-        memberHasAvatar: !!member.user.avatar,
-      },
-    });
+        threshold
+      }, punishment)
+    ]);
 
-    console.log(`[Security] Lockdown activated in ${guild.name} (${guild.id}), sensitivity: ${tracker.lockdownSensitivity.toFixed(2)}`);
+    console.log(`[Security] Lockdown activated in ${guild.name}`);
   } else if (tracker.isLockdown && joinCount > 0) {
     const memberRisk = calculateMemberRisk(member);
-    const effectiveThreshold = Math.max(1, Math.floor(threshold * (1 - tracker.lockdownSensitivity)));
 
-    if (joinCount >= effectiveThreshold) {
-      const risk = Math.min(100, 75 + joinCount * 2);
-      console.log(`[Security] Post-raid suspicious join in ${guild.name} (${guild.id}) by ${member.id}`);
-
-      await incidentEngine?.log({
-        type: 'raid_suspicious_join',
-        guildId: guild.id,
-        userId: member.id,
-        risk,
-        details: {
-          joinCount,
-          effectiveThreshold,
-          lockdownSensitivity: tracker.lockdownSensitivity,
-          memberAccountAge: now - member.user.createdTimestamp,
-        },
+    if (memberRisk >= 60) {
+      await punishmentEngine.punish(guild.id, member.id, 'TIMEOUT', 'Luna: Suspicious account joined during raid lockdown').catch(e => {
+        console.log(`[Security] Failed to timeout suspicious joiner: ${e.message}`);
+        return null;
       });
 
-      if (memberRisk >= 60) {
-        await punishmentEngine?.punish(guild, member.id, 'raid_suspicious_member', {
-          risk: memberRisk,
-          reason: 'Suspicious account joined during active raid lockdown',
-          duration: '15m',
-        });
-      }
+      await incidentEngine.create(guild.id, 'antiraid', 'suspicious_join', member.id, member.id, 'high', memberRisk, {
+        joinCount,
+        accountAge: now - member.user.createdTimestamp
+      }, 'timeout');
     }
   }
 
   if (tracker.isLockdown && now - tracker.lastRaidDetected > windowMs * 3) {
     tracker.isLockdown = false;
-    tracker.lockdownSensitivity = DEFAULT_LOCKDOWN_SENSITIVITY;
-    console.log(`[Security] Lockdown deactivated in ${guild.name} (${guild.id})`);
+    console.log(`[Security] Lockdown deactivated in ${guild.name}`);
   }
 }

@@ -24,44 +24,14 @@ function calculateRuleRisk(rule) {
     if (hasAlert) risk += 15;
   }
 
-  if (rule.trigger_type === 4) {
-    risk += 20;
-  }
-
-  if (rule.exempt_roles && rule.exempt_roles.length > 0) {
-    risk += 15;
-  }
-
-  if (rule.exempt_channels && rule.exempt_channels.length > 0) {
-    risk += 10;
-  }
+  if (rule.trigger_type === 4) risk += 20;
+  if (rule.exempt_roles && rule.exempt_roles.length > 0) risk += 15;
+  if (rule.exempt_channels && rule.exempt_channels.length > 0) risk += 10;
 
   return Math.min(risk, 100);
 }
 
-async function getAutomodExecutor(guild, ruleId, auditCorrelator) {
-  try {
-    const auditLog = await auditCorrelator.getRecentAuditLogs(guild, {
-      type: 'AUTO_MODERATION_BLOCK_MESSAGE',
-      limit: 5
-    });
-
-    const entry = auditLog.entries.find(e => e.changes?.some(c => c.key === 'id' && c.new_value === ruleId));
-    if (entry) return entry.executor;
-
-    const createAuditLog = await auditCorrelator.getRecentAuditLogs(guild, {
-      type: 'AUTO_MODERATION_BLOCK_MESSAGE',
-      limit: 10
-    });
-
-    return createAuditLog.entries.first()?.executor || null;
-  } catch (error) {
-    console.log(`[Security] Failed to get automod executor: ${error.message}`);
-    return null;
-  }
-}
-
-async function deleteAutomodRule(guild, ruleId, client, reason) {
+async function deleteAutomodRule(guild, ruleId, reason) {
   try {
     await guild.autoModerationRules.delete(ruleId, reason);
     console.log(`[Security] Deleted automod rule: ${ruleId}`);
@@ -73,83 +43,63 @@ async function deleteAutomodRule(guild, ruleId, client, reason) {
 }
 
 export async function handleAutoModRuleCreate(event, context) {
-  const { client, cache, database, incidentEngine, punishmentEngine, snapshotManager, auditCorrelator, whitelistManager, ownerManager } = context;
+  const { client, cache, database, incidentEngine, punishmentEngine, auditCorrelator, whitelistManager, ownerManager } = context;
 
   try {
-    const config = cache.get('config');
-    if (!config?.modules?.antiautomod?.enabled) {
-      return;
-    }
+    const config = await database.getConfig(event.rule?.guild?.id);
+    if (!config?.modules?.antiautomod?.enabled) return;
 
     const { rule } = event;
     if (!rule) return;
 
-    const executor = await getAutomodExecutor(rule.guild, rule.id, auditCorrelator);
-    if (!executor) {
-      console.log(`[Security] Unable to determine automod rule creator for ${rule.id}`);
-      return;
-    }
+    const executorId = await auditCorrelator.resolveExecutor(rule.guild, 'AUTO_MODERATION_RULE_CREATE', rule.id).catch(() => null);
+    if (!executorId) return;
 
-    if (whitelistManager.isWhitelisted(executor.id)) return;
-    if (await ownerManager.isExtraOwner(executor.id)) return;
+    if (await whitelistManager.isWhitelisted(rule.guild.id, executorId)) return;
+    if (await ownerManager.isExtraOwner(rule.guild.id, executorId)) return;
 
     const riskScore = calculateRuleRisk(rule);
 
     if (riskScore >= 50 || rule.trigger_type === 4) {
-      console.log(`[Security] Suspicious automod rule created by ${executor.id}: Risk ${riskScore}`);
+      console.log(`[Security] Suspicious automod rule created by ${executorId}: Risk ${riskScore}`);
 
-      if (config?.antiautomod?.auto_delete) {
-        await deleteAutomodRule(rule.guild, rule.id, client, 'Luna: Suspicious automod rule');
+      if (config?.modules?.antiautomod?.auto_delete) {
+        await deleteAutomodRule(rule.guild, rule.id, 'Luna: Suspicious automod rule');
       }
 
-      const punishmentType = riskScore >= 70 ? 'BAN' : riskScore >= 50 ? 'TEMPBAN' : 'KICK';
+      const punishmentType = riskScore >= 70 ? 'BAN' : riskScore >= 50 ? 'TIMEOUT' : 'KICK';
 
-      await punishmentEngine.apply(rule.guild, {
-        type: punishmentType,
-        moderator: client.user,
-        reason: `Suspicious automod rule creation - Risk: ${riskScore}`,
-        duration: punishmentType === 'TEMPBAN' ? 86400000 : undefined,
-        target: executor
-      });
-
-      await incidentEngine.log({
-        type: 'SUSPICIOUS_AUTOMOD_CREATE',
-        severity: riskScore >= 70 ? 'CRITICAL' : 'HIGH',
-        executor: executor.id,
-        guild: rule.guild.id,
-        riskScore,
-        details: {
+      await Promise.all([
+        punishmentEngine.punish(rule.guild.id, executorId, punishmentType, `Luna: Suspicious automod rule - Risk: ${riskScore}`).catch(e => {
+          console.log(`[Security] Failed to punish: ${e.message}`);
+          return null;
+        }),
+        incidentEngine.create(rule.guild.id, 'antiautomod', 'rule_create', executorId, rule.id, riskScore >= 70 ? 'critical' : 'high', riskScore, {
           ruleId: rule.id,
           ruleName: rule.name,
-          triggerType: rule.trigger_type,
-          actions: rule.actions,
-          exemptRoles: rule.exempt_roles,
-          exemptChannels: rule.exempt_channels
-        }
-      });
+          triggerType: rule.trigger_type
+        }, punishmentType)
+      ]);
     }
   } catch (error) {
-    console.log(`[Security] Error in antiautomod rule create handler: ${error.message}`);
+    console.log(`[Security] Error in antiautomod rule create: ${error.message}`);
   }
 }
 
-export async function handleAutoModRuleUpdate(event, context) {
-  const { client, cache, database, incidentEngine, punishmentEngine, snapshotManager, auditCorrelator, whitelistManager, ownerManager } = context;
+export async function handleAutoModRuleUpdate(oldRule, newRule, context) {
+  const { client, cache, database, incidentEngine, punishmentEngine, auditCorrelator, whitelistManager, ownerManager } = context;
 
   try {
-    const config = cache.get('config');
-    if (!config?.modules?.antiautomod?.enabled) {
-      return;
-    }
+    const config = await database.getConfig(newRule?.guild?.id);
+    if (!config?.modules?.antiautomod?.enabled) return;
 
-    const { oldRule, newRule } = event;
     if (!oldRule || !newRule) return;
 
-    const executor = await getAutomodExecutor(newRule.guild, newRule.id, auditCorrelator);
-    if (!executor) return;
+    const executorId = await auditCorrelator.resolveExecutor(newRule.guild, 'AUTO_MODERATION_RULE_UPDATE', newRule.id).catch(() => null);
+    if (!executorId) return;
 
-    if (whitelistManager.isWhitelisted(executor.id)) return;
-    if (await ownerManager.isExtraOwner(executor.id)) return;
+    if (await whitelistManager.isWhitelisted(newRule.guild.id, executorId)) return;
+    if (await ownerManager.isExtraOwner(newRule.guild.id, executorId)) return;
 
     const oldRisk = calculateRuleRisk(oldRule);
     const newRisk = calculateRuleRisk(newRule);
@@ -158,13 +108,12 @@ export async function handleAutoModRuleUpdate(event, context) {
     const oldActions = oldRule.actions?.map(a => a.type) || [];
     const newActions = newRule.actions?.map(a => a.type) || [];
     const addedActions = newActions.filter(a => !oldActions.includes(a));
-
     const hasNewDangerousAction = addedActions.some(a => DANGEROUS_AUTOMOD_ACTIONS.includes(a));
 
     if (hasNewDangerousAction || riskIncrease >= 30 || newRule.trigger_type === 4) {
-      console.log(`[Security] Suspicious automod rule update by ${executor.id}: Risk increase ${riskIncrease}`);
+      console.log(`[Security] Suspicious automod rule update by ${executorId}: Risk increase ${riskIncrease}`);
 
-      if (config?.antiautomod?.auto_revert) {
+      if (config?.modules?.antiautomod?.auto_revert) {
         try {
           await newRule.edit({
             actions: oldRule.actions,
@@ -173,91 +122,63 @@ export async function handleAutoModRuleUpdate(event, context) {
             exempt_channels: oldRule.exempt_channels,
             enabled: oldRule.enabled
           }, 'Luna: Reverting suspicious automod changes');
-          console.log(`[Security] Reverted automod rule changes for ${newRule.id}`);
         } catch (error) {
-          console.log(`[Security] Failed to revert automod rule: ${error.message}`);
+          console.log(`[Security] Failed to revert: ${error.message}`);
         }
       }
 
-      const punishmentType = riskIncrease >= 50 ? 'BAN' : 'TEMPBAN';
+      const punishmentType = riskIncrease >= 50 ? 'BAN' : 'TIMEOUT';
 
-      await punishmentEngine.apply(newRule.guild, {
-        type: punishmentType,
-        moderator: client.user,
-        reason: `Suspicious automod rule modification - Risk increase: ${riskIncrease}`,
-        duration: 86400000,
-        target: executor
-      });
-
-      await incidentEngine.log({
-        type: 'SUSPICIOUS_AUTOMOD_UPDATE',
-        severity: riskIncrease >= 50 ? 'CRITICAL' : 'HIGH',
-        executor: executor.id,
-        guild: newRule.guild.id,
-        riskScore: newRisk,
-        riskIncrease,
-        details: {
+      await Promise.all([
+        punishmentEngine.punish(newRule.guild.id, executorId, punishmentType, `Luna: Suspicious automod update - Risk increase: ${riskIncrease}`).catch(e => {
+          console.log(`[Security] Failed to punish: ${e.message}`);
+          return null;
+        }),
+        incidentEngine.create(newRule.guild.id, 'antiautomod', 'rule_update', executorId, newRule.id, riskIncrease >= 50 ? 'critical' : 'high', newRisk, {
           ruleId: newRule.id,
           ruleName: newRule.name,
-          triggerType: newRule.trigger_type,
-          previousActions: oldRule.actions,
-          currentActions: newRule.actions,
-          addedActions,
-          exemptRoles: newRule.exempt_roles,
-          exemptChannels: newRule.exempt_channels
-        }
-      });
+          riskIncrease,
+          addedActions
+        }, punishmentType)
+      ]);
     }
   } catch (error) {
-    console.log(`[Security] Error in antiautomod rule update handler: ${error.message}`);
+    console.log(`[Security] Error in antiautomod rule update: ${error.message}`);
   }
 }
 
 export async function handleAutoModRuleDelete(event, context) {
-  const { client, cache, database, incidentEngine, punishmentEngine, snapshotManager, auditCorrelator, whitelistManager, ownerManager } = context;
+  const { client, cache, database, incidentEngine, punishmentEngine, auditCorrelator, whitelistManager, ownerManager } = context;
 
   try {
-    const config = cache.get('config');
-    if (!config?.modules?.antiautomod?.enabled) {
-      return;
-    }
+    const config = await database.getConfig(event.rule?.guild?.id);
+    if (!config?.modules?.antiautomod?.enabled) return;
 
     const { rule } = event;
     if (!rule) return;
 
-    if (PROTECTED_RULE_TYPES.includes(rule.trigger_type)) {
-      const executor = await getAutomodExecutor(rule.guild, rule.id, auditCorrelator);
+    if (!PROTECTED_RULE_TYPES.includes(rule.trigger_type)) return;
 
-      if (executor) {
-        if (whitelistManager.isWhitelisted(executor.id)) return;
-        if (await ownerManager.isExtraOwner(executor.id)) return;
+    const executorId = await auditCorrelator.resolveExecutor(rule.guild, 'AUTO_MODERATION_RULE_DELETE', rule.id).catch(() => null);
+    if (!executorId) return;
 
-        console.log(`[Security] Protected automod rule deleted by ${executor.id}: ${rule.name}`);
+    if (await whitelistManager.isWhitelisted(rule.guild.id, executorId)) return;
+    if (await ownerManager.isExtraOwner(rule.guild.id, executorId)) return;
 
-        await punishmentEngine.apply(rule.guild, {
-          type: 'BAN',
-          moderator: client.user,
-          reason: `Deletion of protected automod rule: ${rule.name}`,
-          target: executor
-        });
+    console.log(`[Security] Protected automod rule deleted by ${executorId}: ${rule.name}`);
 
-        await incidentEngine.log({
-          type: 'PROTECTED_AUTOMOD_DELETE',
-          severity: 'CRITICAL',
-          executor: executor.id,
-          guild: rule.guild.id,
-          details: {
-            ruleId: rule.id,
-            ruleName: rule.name,
-            triggerType: rule.trigger_type,
-            actions: rule.actions,
-            exemptRoles: rule.exempt_roles,
-            exemptChannels: rule.exempt_channels
-          }
-        });
-      }
-    }
+    await Promise.all([
+      punishmentEngine.punish(rule.guild.id, executorId, 'BAN', `Luna: Deletion of protected automod rule: ${rule.name}`).catch(e => {
+        console.log(`[Security] Failed to punish: ${e.message}`);
+        return null;
+      }),
+      incidentEngine.create(rule.guild.id, 'antiautomod', 'rule_delete', executorId, rule.id, 'critical', 90, {
+        ruleId: rule.id,
+        ruleName: rule.name,
+        triggerType: rule.trigger_type
+      }, 'ban')
+    ]);
   } catch (error) {
-    console.log(`[Security] Error in antiautomod rule delete handler: ${error.message}`);
+    console.log(`[Security] Error in antiautomod rule delete: ${error.message}`);
   }
 }

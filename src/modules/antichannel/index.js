@@ -15,13 +15,16 @@ export async function handleChannelCreate(event, context) {
   if (await ownerManager.isExtraOwner(guildId, executorId)) return;
 
   const actions = config.modules.antichannel.actions || {};
-  const reason = `Luna: Unauthorized channel creation`;
+  const reason = 'Luna: Unauthorized channel creation';
 
   await Promise.all([
-    snapshotManager.captureChannel(guildId, event.channel),
+    snapshotManager.takeChannelSnapshot(guildId, event.channel.id).catch(() => null),
     actions.restore ? event.channel.delete(reason).catch(() => null) : null,
-    actions.punish ? punishmentEngine.punish(guildId, executorId, actions.punish, reason) : null,
-    incidentEngine.create(guildId, 'antichannel', 'channel_create', executorId, event.channel.id, 'critical', 80, { channel: event.channel.name }, 'delete_and_punish')
+    actions.punish ? punishmentEngine.punish(guildId, executorId, actions.punish, reason).catch(e => {
+      console.log(`[Security] Failed to punish: ${e.message}`);
+      return null;
+    }) : null,
+    incidentEngine.create(guildId, 'antichannel', 'channel_create', executorId, event.channel.id, 'critical', 80, { channelName: event.channel.name }, 'delete_and_punish')
   ]);
 }
 
@@ -42,28 +45,34 @@ export async function handleChannelDelete(event, context) {
   if (await ownerManager.isExtraOwner(guildId, executorId)) return;
 
   const actions = config.modules.antichannel.actions || {};
-  const reason = `Luna: Unauthorized channel deletion`;
 
   const tasks = [
-    actions.punish ? punishmentEngine.punish(guildId, executorId, actions.punish, reason) : null,
-    incidentEngine.create(guildId, 'antichannel', 'channel_delete', executorId, event.channel.id, 'critical', 85, { channel: event.channel.name }, 'restore_and_punish')
+    incidentEngine.create(guildId, 'antichannel', 'channel_delete', executorId, event.channel.id, 'critical', 85, { channelName: event.channel.name }, 'restore_and_punish')
   ];
+
+  if (actions.punish) {
+    tasks.push(punishmentEngine.punish(guildId, executorId, actions.punish, 'Luna: Unauthorized channel deletion').catch(e => {
+      console.log(`[Security] Failed to punish: ${e.message}`);
+      return null;
+    }));
+  }
 
   if (actions.restore) {
     tasks.push(
-      snapshotManager.getChannelSnapshot(guildId, event.channel.id).then(async (snapshot) => {
+      snapshotManager.getSnapshot(guildId, `channel:${event.channel.id}`).then(async snapshot => {
         if (snapshot) {
-          const restored = await guild.channels.create(snapshot.name, {
+          const restored = await guild.channels.create({
+            name: snapshot.name,
             type: snapshot.channelType || snapshot.type,
             topic: snapshot.topic,
             nsfw: snapshot.nsfw,
             parent: snapshot.parentId ? await guild.channels.fetch(snapshot.parentId).catch(() => null) : null,
-            permissionOverwrites: snapshot.overwrites || []
+            permissionOverwrites: snapshot.permissionOverwrites || []
           }).catch(() => null);
           if (restored && snapshot.position) await restored.setPosition(snapshot.position).catch(() => null);
           console.log(`[Security] Restored channel: ${restored?.name || snapshot.name}`);
         }
-      })
+      }).catch(() => null)
     );
   }
 
@@ -104,20 +113,26 @@ export async function handleChannelUpdate(event, context) {
   if (await ownerManager.isExtraOwner(guildId, executorId)) return;
 
   const actions = config.modules.antichannel.actions || {};
-  const reason = `Luna: Dangerous permission change`;
+  const reason = 'Luna: Dangerous permission change';
 
   const tasks = [
-    actions.punish ? punishmentEngine.punish(guildId, executorId, actions.punish, reason) : null,
     incidentEngine.create(guildId, 'antichannel', 'permission_overwrite', executorId, event.channel.id, 'critical', 75, { changedOverwrites }, 'revert_and_punish')
   ];
 
+  if (actions.punish) {
+    tasks.push(punishmentEngine.punish(guildId, executorId, actions.punish, reason).catch(e => {
+      console.log(`[Security] Failed to punish: ${e.message}`);
+      return null;
+    }));
+  }
+
   if (actions.restore) {
     tasks.push(
-      snapshotManager.getChannelSnapshot(guildId, event.channel.id).then(async (snapshot) => {
+      snapshotManager.getSnapshot(guildId, `channel:${event.channel.id}`).then(async snapshot => {
         if (snapshot?.overwrites) {
           await event.channel.edit({ permissionOverwrites: snapshot.overwrites }, reason).catch(() => null);
         }
-      })
+      }).catch(() => null)
     );
   }
 

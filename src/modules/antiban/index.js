@@ -10,20 +10,37 @@ export async function handleBanAdd(event, context) {
   const targetId = event.ban?.user?.id || event.targetId;
   if (!targetId) return;
 
+  const actions = config.modules.antiban.actions || {};
+
+  // INSTANT: Unban immediately without waiting for anything
+  if (actions.unban) {
+    guild.members.unban(targetId, 'Luna: Unauthorized ban').catch(e => {
+      console.log(`[Security] Failed to unban ${targetId}: ${e.message}`);
+    });
+  }
+
+  // Resolve executor asynchronously - don't block the unban
   const executorId = event.executorId || await auditCorrelator.resolveBanExecutor(guild, targetId);
-  console.log(`[Security] Ban: ${targetId} in ${guild.name} by ${executorId || 'unknown'}`);
 
   if (!executorId) return;
   if (await whitelistManager.isWhitelisted(guildId, executorId)) return;
   if (await ownerManager.isExtraOwner(guildId, executorId)) return;
 
-  const actions = config.modules.antiban.actions || {};
+  console.log(`[Security] Ban detected: ${targetId} in ${guild.name} by ${executorId}`);
 
-  await Promise.all([
-    actions.unban ? guild.members.unban(targetId, 'Luna: Unauthorized ban').catch(() => null) : null,
-    actions.punish ? punishmentEngine.punish(guildId, executorId, actions.punish, `Luna: Unauthorized ban of ${targetId}`) : null,
-    incidentEngine.create(guildId, 'antiban', 'ban_add', executorId, targetId, 'critical', 85, { targetId }, 'unban_and_punish')
-  ]);
+  const reason = `Luna: Unauthorized ban of ${targetId}`;
 
-  console.log(`[Security] Unbanned ${targetId}`);
+  const tasks = [];
+
+  // INSTANT: Punish immediately
+  if (actions.punish) {
+    tasks.push(punishmentEngine.punish(guildId, executorId, actions.punish, reason).catch(e => {
+      console.log(`[Security] Failed to punish ${executorId}: ${e.message}`);
+      return null;
+    }));
+  }
+
+  tasks.push(incidentEngine.create(guildId, 'antiban', 'ban_add', executorId, targetId, 'critical', 85, { targetId }, 'unban_and_punish'));
+
+  await Promise.all(tasks);
 }
