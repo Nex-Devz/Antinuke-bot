@@ -4,10 +4,11 @@
 
 ### Discord Anti-Nuke & Anti-Abuse Security Bot
 
-<img src="https://cdn.discordapp.com/embed/avatars/10.png" alt="Lune Logo" width="64" height="64">
+<div>
+<img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/discord/discord-original.svg" alt="Discord" width="48" height="48" style="margin-right: 12px;">
+<img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/nodejs/nodejs-original.svg" alt="Node.js" width="48" height="48">
+</div>
 
-![Node.js](https://img.shields.io/badge/Node.js-18%2B-339933?style=flat-square&logo=node.js&logoColor=white)
-![Discord.js](https://img.shields.io/badge/Discord.js-14-5865F2?style=flat-square&logo=discord&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)
 
 **Gateway first. Memory first. SQLite second. Discord API last.**
@@ -232,7 +233,7 @@ Then in Discord: `/antinuke` to open the security panel, or `/automod` to manage
 
 ## Tech
 
-| | |
+|| |
 |---|---|
 | Runtime | Node.js 18+ |
 | Library | Discord.js 14 |
