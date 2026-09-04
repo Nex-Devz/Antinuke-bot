@@ -7,8 +7,8 @@
 <img src="https://cdn.jsdelivr.net/gh/Nex-Devz/Antinuke-bot@main/assets/lune-logo.png" alt="Lune Logo" width="128" height="128">
 
 <div>
-<img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/discord/discord-original.svg" alt="Discord" width="48" height="48" style="margin-right: 12px;">
-<img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/nodejs/nodejs-original.svg" alt="Node.js" width="48" height="48">
+<img src="https://raw.githubusercontent.com/discord/discord-api-docs/main/assets/discord-logo.svg" alt="Discord" width="48" height="48" style="margin-right: 12px;">
+<img src="https://raw.githubusercontent.com/nodejs/nodejs.org/main/public/static/images/logo-light.svg" alt="Node.js" width="48" height="48">
 </div>
 
 ![License](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)
