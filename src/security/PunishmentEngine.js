@@ -54,7 +54,7 @@ export class PunishmentEngine {
       const act = String(action).toUpperCase().replace(/ /g, '_');
       switch (act) {
         case 'BAN':
-          return await this.#ban(guild, member, reason);
+          return await this.#ban(guild, member, executorId, reason);
         case 'KICK':
           return await this.#kick(guild, member, reason);
         case 'TIMEOUT':
@@ -76,20 +76,13 @@ export class PunishmentEngine {
     }
   }
 
-  async #ban(guild, member, reason) {
-    if (!member) {
-      // Try banning by ID directly (faster, no member fetch needed)
-      try {
-        await guild.members.ban(reason ? `${reason}` : 'Luna: Unauthorized action', { deleteMessageSeconds: 0 });
-        console.log(`[Security] Banned user by ID`);
-        return { success: true, error: null };
-      } catch {
-        return { success: false, error: 'Member not found' };
-      }
-    }
+  async #ban(guild, member, executorId, reason) {
+    const target = member || String(executorId || '');
+    if (!target) return { success: false, error: 'Target not found' };
+
     try {
-      await guild.members.ban(member, { reason });
-      console.log(`[Security] Banned ${member.user?.tag || member.id}`);
+      await guild.members.ban(target, { reason: reason || 'Luna: Unauthorized action', deleteMessageSeconds: 0 });
+      console.log(`[Security] Banned ${member?.user?.tag || executorId}`);
       return { success: true, error: null };
     } catch (err) {
       return this.#handleDiscordError(err);

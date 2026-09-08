@@ -12,22 +12,25 @@ export class SnapshotManager {
 
     for (const [channelId, channel] of guild.channels.cache) {
       try {
+        const overwrites = channel.permissionOverwrites?.cache?.map(o => ({
+          id: o.id,
+          type: o.type,
+          allow: o.allow.toString(),
+          deny: o.deny.toString()
+        })) || [];
         const snapshot = {
           type: 'channel',
           id: channelId,
           name: channel.name,
           channelType: channel.type,
           position: channel.position,
+          parent: channel.parentId,
           parentId: channel.parentId,
           topic: channel.topic,
           nsfw: channel.nsfw,
           slowmode: channel.rateLimitPerUser,
-          overwrites: channel.permissionOverwrites?.cache.map(o => ({
-            id: o.id,
-            type: o.type,
-            allow: o.allow.toString(),
-            deny: o.deny.toString()
-          })) || []
+          overwrites: overwrites,
+          permissionOverwrites: overwrites
         };
         state.channelSnapshots.set(channelId, snapshot);
       } catch {}
@@ -60,6 +63,13 @@ export class SnapshotManager {
       const channel = guild.channels.cache.get(channelId);
       if (!channel) throw new Error('Channel not found');
 
+      const overwrites = channel.permissionOverwrites?.cache?.map(o => ({
+        id: o.id,
+        type: o.type,
+        allow: o.allow.toString(),
+        deny: o.deny.toString()
+      })) || [];
+
       const snapshot = {
         type: 'channel',
         id: channelId,
@@ -67,12 +77,9 @@ export class SnapshotManager {
         channelType: channel.type,
         position: channel.position,
         parent: channel.parentId,
-        permissionOverwrites: channel.permissionOverwrites.cache.map(o => ({
-          id: o.id,
-          type: o.type,
-          allow: o.allow.toString(),
-          deny: o.deny.toString()
-        })),
+        parentId: channel.parentId,
+        permissionOverwrites: overwrites,
+        overwrites: overwrites,
         topic: channel.topic || null,
         nsfw: channel.nsfw || false,
         slowmode: channel.rateLimitPerUser || 0,
@@ -324,12 +331,22 @@ export class SnapshotManager {
     const cacheKey = `${guildId}:snapshots:${key}`;
     this.snapshotCache.set(cacheKey, snapshot);
 
+    const state = this.cache?.get?.(guildId);
+    if (state) {
+      if (key.startsWith('channel:') && state.channelSnapshots) {
+        state.channelSnapshots.set(key.replace('channel:', ''), snapshot);
+      } else if (key.startsWith('role:') && state.roleSnapshots) {
+        state.roleSnapshots.set(key.replace('role:', ''), snapshot);
+      }
+    }
+
     try {
-      await this.database?.upsert?.('snapshots', {
-        guildId,
-        snapshotKey: key,
-        data: JSON.stringify(snapshot)
-      });
+      if (this.database?.upsertSnapshot) {
+        this.database.upsertSnapshot(guildId, key, snapshot);
+      } else if (this.database?.addSecuritySnapshot) {
+        const now = new Date().toISOString();
+        this.database.addSecuritySnapshot(guildId, 'generic', key, snapshot, now);
+      }
     } catch (err) {
       console.error(`[Security] Snapshot DB store error:`, err.message);
     }
@@ -338,20 +355,36 @@ export class SnapshotManager {
   async getSnapshot(guildId, key) {
     const cacheKey = `${guildId}:snapshots:${key}`;
     let snapshot = this.snapshotCache.get(cacheKey);
-
     if (snapshot) return snapshot;
 
+    const state = this.cache?.get?.(guildId);
+    if (state) {
+      if (key.startsWith('channel:') && state.channelSnapshots) {
+        const cached = state.channelSnapshots.get(key.replace('channel:', ''));
+        if (cached) return cached;
+      } else if (key.startsWith('role:') && state.roleSnapshots) {
+        const cached = state.roleSnapshots.get(key.replace('role:', ''));
+        if (cached) return cached;
+      }
+    }
+
     try {
-      const row = await this.database?.get?.('snapshots', { guildId, snapshotKey: key });
-      if (row?.data) {
-        snapshot = typeof row.data === 'string' ? JSON.parse(row.data) : row.data;
-        this.snapshotCache.set(cacheKey, snapshot);
-        return snapshot;
+      if (this.database?.getSnapshot) {
+        const row = this.database.getSnapshot(guildId, key);
+        if (row?.data) {
+          snapshot = typeof row.data === 'string' ? JSON.parse(row.data) : row.data;
+          this.snapshotCache.set(cacheKey, snapshot);
+          return snapshot;
+        }
       }
     } catch (err) {
       console.error(`[Security] Snapshot DB fetch error:`, err.message);
     }
 
     return null;
+  }
+
+  async getChannelSnapshot(guildId, channelId) {
+    return this.getSnapshot(guildId, `channel:${channelId}`);
   }
 }

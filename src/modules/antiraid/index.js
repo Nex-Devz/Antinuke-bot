@@ -2,6 +2,17 @@ const DEFAULT_RAID_THRESHOLD = 10;
 const DEFAULT_RAID_WINDOW = 10_000;
 
 function getRaidTracker(cache, guildId) {
+  if (cache && typeof cache.get === 'function') {
+    const state = cache.get(guildId);
+    if (!state.antiRaidTracker) {
+      state.antiRaidTracker = {
+        joinTimestamps: [],
+        isLockdown: false,
+        lastRaidDetected: 0,
+      };
+    }
+    return state.antiRaidTracker;
+  }
   const key = 'antiRaid';
   if (!cache[key]) cache[key] = {};
   if (!cache[key][guildId]) {

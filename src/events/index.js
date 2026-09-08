@@ -3,6 +3,7 @@ import {
   handleChannelDelete,
   handleChannelUpdate
 } from "../modules/antichannel/index.js";
+import { handleChannelUpdatePermission } from "../modules/antipermission/index.js";
 import {
   handleRoleCreate,
   handleRoleDelete,
@@ -80,6 +81,7 @@ export function registerEvents(client, context) {
     try {
       const event = { guild: newChannel.guild, executorId: null, channel: newChannel, old: { channel: oldChannel } };
       await handleChannelUpdate(event, context);
+      await handleChannelUpdatePermission(event, context);
     } catch (err) {
       console.error("[Gateway]", err);
     }

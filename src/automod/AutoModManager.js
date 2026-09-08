@@ -223,7 +223,7 @@ export class AutoModManager {
     switch (rule.type) {
       case "keyword":
         payload.triggerMetadata = {
-          keywordFilter: cfg.keywords || ["nigger"],
+          keywordFilter: (Array.isArray(cfg.keywords) && cfg.keywords.length > 0) ? cfg.keywords : ["discord.gg/*"],
           allowList: cfg.allowlist || [],
           regexPatterns: cfg.regex ? cfg.regex.split("\n").filter(Boolean) : undefined
         };
@@ -286,10 +286,11 @@ export class AutoModManager {
 
   async updateDiscordRule(guild, rule) {
     const existing = await guild.autoModerationRules.fetch(rule.discordRuleId);
+    const guildConfig = this.getGuildDB(guild.id);
     await guild.autoModerationRules.edit(existing, {
       name: rule.name,
       triggerMetadata: this.buildRulePayload(rule).triggerMetadata,
-      actions: this.buildActions(rule.actionConfig, this.getGuildDB(guild.id).logChannelId),
+      actions: this.buildActions(rule.actionConfig, guildConfig?.logChannelId),
       enabled: rule.enabled,
       exemptRoles: rule.exemptRoles || [],
       exemptChannels: rule.exemptChannels || []

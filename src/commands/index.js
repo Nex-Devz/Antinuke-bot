@@ -124,8 +124,16 @@ function buildStatusContainer(config, state, enabled) {
   const tick = getEmoji('floovi_tick');
   const cross = getEmoji('floovi_cross');
 
-  const modules = Object.entries(config || {})
-    .filter(([k, v]) => typeof v === 'object' && v !== null && 'enabled' in v);
+  const cfgModules = config?.modules || config || {};
+  const seen = new Set();
+  const modules = Object.entries(cfgModules)
+    .filter(([k, v]) => {
+      if (typeof v !== 'object' || v === null || !('enabled' in v)) return false;
+      const normalized = k.toLowerCase().replace(/[^a-z]/g, '');
+      if (seen.has(normalized)) return false;
+      seen.add(normalized);
+      return true;
+    });
 
   const moduleList = modules
     .map(([k, v]) => `> ${v.enabled ? (tick || '\u2705') : (cross || '\u274C')} **${formatModuleName(k)}**`)
@@ -334,7 +342,8 @@ async function handleCommand(interaction, context) {
       const config = database.getGuildConfig(guildId);
       const state = cache.get(guildId);
       state.client = interaction.client;
-      const enabled = config && Object.values(config).some(v => typeof v === 'object' && v !== null && v.enabled === true);
+      const cfgModules = config?.modules || config || {};
+      const enabled = Object.values(cfgModules).some(v => typeof v === 'object' && v !== null && v.enabled === true);
       const container = buildStatusContainer(config, state, enabled);
       await interaction.reply({ components: [container], flags: 32768, ephemeral: true });
       const msg = await interaction.fetchReply();
@@ -493,9 +502,16 @@ async function handleModalSubmit(interaction, context) {
       }
 
       const wizardValues = ['antiChannel','antiRole','antiPermission','antiWebhook','antiBan','antiKick','antiBot','antiRaid','antiMassMention'];
+      if (!config.modules) config.modules = {};
       for (const k of wizardValues) {
-        if (config[k] && typeof config[k] === 'object' && 'enabled' in config[k]) {
-          config[k].enabled = selected.includes(k);
+        const isSelected = selected.includes(k);
+        if (config[k] && typeof config[k] === 'object') {
+          config[k].enabled = isSelected;
+        }
+        if (!config.modules[k]) {
+          config.modules[k] = { enabled: isSelected };
+        } else {
+          config.modules[k].enabled = isSelected;
         }
       }
 

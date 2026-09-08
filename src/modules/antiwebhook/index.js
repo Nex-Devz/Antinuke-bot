@@ -7,8 +7,8 @@ export async function handleWebhookUpdate(event, context) {
   const config = await database.getConfig(guildId);
   if (!config?.modules?.antiwebhook?.enabled) return;
 
-  const webhooks = await guild.fetchWebhooks().catch(() => []);
-  if (!webhooks || webhooks.size === 0) return;
+  const webhooks = await guild.fetchWebhooks().catch(() => null);
+  if (!webhooks || !webhooks.size) return;
 
   for (const [, webhook] of webhooks) {
     const executorId = await auditCorrelator.resolveExecutor(guild, 'WEBHOOK_CREATE', webhook.id);

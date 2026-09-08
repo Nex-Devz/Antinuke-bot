@@ -6,16 +6,45 @@ export class WhitelistManager {
 
   isWhitelisted(guildId, userId, action) {
     if (!userId) return false;
-    const raw = this.cache.get(`${guildId}:whitelist`);
-    const entries = Array.isArray(raw) ? raw : [];
-    const userLower = String(userId).toLowerCase();
+    const userStr = String(userId);
 
-    for (const entry of entries) {
-      if (entry.targetId.toLowerCase() !== userLower) continue;
+    // 1. Guild Cache Check
+    if (this.cache) {
+      const state = typeof this.cache.get === 'function' ? this.cache.get(guildId) : null;
+      if (state?.whitelist instanceof Set && state.whitelist.has(userStr)) {
+        return true;
+      }
 
-      if (entry.targetType === 'user' || entry.targetType === 'role' || entry.targetType === 'bot') {
-        if (entry.actions.includes('ALL')) return true;
-        if (entry.actions.includes(action)) return true;
+      // Keyed cache check
+      const raw = this.cache.get?.(`${guildId}:whitelist`);
+      if (Array.isArray(raw)) {
+        const userLower = userStr.toLowerCase();
+        for (const entry of raw) {
+          if (entry.targetId?.toLowerCase() !== userLower) continue;
+          if (!action || !entry.actions || entry.actions.includes('ALL') || entry.actions.includes(action.toUpperCase())) {
+            return true;
+          }
+        }
+      }
+    }
+
+    // 2. Database Fallback Check
+    if (this.database?.getWhitelist) {
+      try {
+        const rows = this.database.getWhitelist(guildId);
+        if (Array.isArray(rows)) {
+          for (const row of rows) {
+            if (row.targetId === userStr) {
+              if (!action) return true;
+              const actions = typeof row.actions === 'string' ? row.actions.split(',').map(a => a.trim().toUpperCase()) : (row.actions || []);
+              if (actions.includes('ALL') || actions.includes(action.toUpperCase())) {
+                return true;
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.error(`[Security] Whitelist DB check error:`, err.message);
       }
     }
 
@@ -30,43 +59,52 @@ export class WhitelistManager {
 
       const actionList = typeof actions === 'string'
         ? actions.split(',').map(a => a.trim().toUpperCase())
-        : actions.map(a => a.toUpperCase());
+        : (Array.isArray(actions) ? actions.map(a => a.toUpperCase()) : ['ALL']);
 
-      const cacheKey = `${guildId}:whitelist`;
-      let entries = this.cache.get(cacheKey) || [];
+      const now = Date.now();
 
-      const existingIndex = entries.findIndex(
-        e => e.targetId === targetId && e.targetType === targetType
-      );
-
-      const entry = {
-        guildId,
-        targetId,
-        targetType,
-        actions: actionList,
-        addedBy,
-        addedAt: Date.now()
-      };
-
-      if (existingIndex >= 0) {
-        entries[existingIndex] = entry;
-      } else {
-        entries.push(entry);
+      // Update Database
+      if (this.database?.addWhitelist) {
+        try {
+          this.database.addWhitelist(guildId, String(targetId), targetType, actionList.join(','), addedBy || 'system', now);
+        } catch (dbErr) {
+          console.error(`[Security] Whitelist DB add error:`, dbErr.message);
+        }
       }
 
-      this.cache.set(cacheKey, entries);
+      // Update GuildCache
+      if (this.cache) {
+        const state = typeof this.cache.get === 'function' ? this.cache.get(guildId) : null;
+        if (state?.whitelist instanceof Set) {
+          state.whitelist.add(String(targetId));
+        }
 
-      try {
-        await this.database?.upsert?.('whitelists', {
+        const cacheKey = `${guildId}:whitelist`;
+        let entries = this.cache.get?.(cacheKey);
+        if (!Array.isArray(entries)) entries = [];
+
+        const existingIndex = entries.findIndex(
+          e => e.targetId === targetId && e.targetType === targetType
+        );
+
+        const entry = {
           guildId,
-          targetId,
+          targetId: String(targetId),
           targetType,
-          actions: actionList.join(','),
+          actions: actionList,
           addedBy,
-          addedAt: entry.addedAt
-        });
-      } catch (err) {
-        console.error(`[Security] Whitelist DB write error:`, err.message);
+          addedAt: now
+        };
+
+        if (existingIndex >= 0) {
+          entries[existingIndex] = entry;
+        } else {
+          entries.push(entry);
+        }
+
+        if (typeof this.cache.set === 'function') {
+          this.cache.set(cacheKey, entries);
+        }
       }
 
       console.log(`[Security] Whitelist added: ${targetType} ${targetId} for ${actionList.join(',')}`);
@@ -79,22 +117,37 @@ export class WhitelistManager {
 
   async remove(guildId, targetId, targetType) {
     try {
-      const cacheKey = `${guildId}:whitelist`;
-      let entries = this.cache.get(cacheKey) || [];
+      const targetStr = String(targetId);
 
-      entries = entries.filter(
-        e => !(e.targetId === targetId && e.targetType === targetType)
-      );
-
-      this.cache.set(cacheKey, entries);
-
-      try {
-        await this.database?.delete?.('whitelists', { guildId, targetId, targetType });
-      } catch (err) {
-        console.error(`[Security] Whitelist DB delete error:`, err.message);
+      // Update Database
+      if (this.database?.removeWhitelist) {
+        try {
+          this.database.removeWhitelist(guildId, targetStr, targetType || 'user');
+        } catch (dbErr) {
+          console.error(`[Security] Whitelist DB delete error:`, dbErr.message);
+        }
       }
 
-      console.log(`[Security] Whitelist removed: ${targetType} ${targetId}`);
+      // Update GuildCache
+      if (this.cache) {
+        const state = typeof this.cache.get === 'function' ? this.cache.get(guildId) : null;
+        if (state?.whitelist instanceof Set) {
+          state.whitelist.delete(targetStr);
+        }
+
+        const cacheKey = `${guildId}:whitelist`;
+        let entries = this.cache.get?.(cacheKey);
+        if (Array.isArray(entries)) {
+          entries = entries.filter(
+            e => !(e.targetId === targetStr && (!targetType || e.targetType === targetType))
+          );
+          if (typeof this.cache.set === 'function') {
+            this.cache.set(cacheKey, entries);
+          }
+        }
+      }
+
+      console.log(`[Security] Whitelist removed: ${targetType || 'target'} ${targetStr}`);
       return { success: true, error: null };
     } catch (err) {
       console.error(`[Security] Whitelist remove error:`, err.message);
@@ -103,13 +156,33 @@ export class WhitelistManager {
   }
 
   getList(guildId) {
-    const raw = this.cache.get(`${guildId}:whitelist`);
-    return Array.isArray(raw) ? raw : [];
+    const raw = this.cache?.get?.(`${guildId}:whitelist`);
+    if (Array.isArray(raw) && raw.length > 0) return raw;
+
+    if (this.database?.getWhitelist) {
+      try {
+        const rows = this.database.getWhitelist(guildId);
+        if (Array.isArray(rows)) {
+          return rows.map(row => ({
+            guildId: row.guildId,
+            targetId: row.targetId,
+            targetType: row.targetType,
+            actions: typeof row.actions === 'string' ? row.actions.split(',') : (row.actions || []),
+            addedBy: row.addedBy,
+            addedAt: row.createdAt || row.addedAt
+          }));
+        }
+      } catch (err) {
+        console.error(`[Security] Whitelist getList DB error:`, err.message);
+      }
+    }
+
+    return [];
   }
 
   async loadGuild(guildId) {
     try {
-      const rows = await this.database?.all?.('whitelists', { guildId }) || [];
+      const rows = (this.database?.getWhitelist ? this.database.getWhitelist(guildId) : []) || [];
 
       const entries = rows.map(row => ({
         guildId: row.guildId,
@@ -117,13 +190,24 @@ export class WhitelistManager {
         targetType: row.targetType,
         actions: typeof row.actions === 'string' ? row.actions.split(',') : row.actions,
         addedBy: row.addedBy,
-        addedAt: row.addedAt
+        addedAt: row.createdAt || row.addedAt
       }));
 
-      this.cache.set(`${guildId}:whitelist`, entries);
+      if (typeof this.cache?.set === 'function') {
+        this.cache.set(`${guildId}:whitelist`, entries);
+      }
+
+      const state = typeof this.cache?.get === 'function' ? this.cache.get(guildId) : null;
+      if (state?.whitelist instanceof Set) {
+        for (const entry of entries) {
+          state.whitelist.add(entry.targetId);
+        }
+      }
+
       console.log(`[Security] Loaded ${entries.length} whitelist entries for guild ${guildId}`);
     } catch (err) {
       console.error(`[Security] Whitelist load error for guild ${guildId}:`, err.message);
     }
   }
 }
+

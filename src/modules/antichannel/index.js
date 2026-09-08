@@ -59,20 +59,39 @@ export async function handleChannelDelete(event, context) {
 
   if (actions.restore) {
     tasks.push(
-      snapshotManager.getSnapshot(guildId, `channel:${event.channel.id}`).then(async snapshot => {
+      (async () => {
+        const snapshot = await snapshotManager.getSnapshot(guildId, `channel:${event.channel.id}`).catch(() => null)
+          || await snapshotManager.getChannelSnapshot?.(guildId, event.channel.id)?.catch?.(() => null);
         if (snapshot) {
+          const rawOverwrites = snapshot.permissionOverwrites || snapshot.overwrites || [];
+          const formattedOverwrites = Array.isArray(rawOverwrites)
+            ? rawOverwrites.map(o => ({
+                id: o.id,
+                type: o.type,
+                allow: BigInt(o.allow || 0n),
+                deny: BigInt(o.deny || 0n)
+              }))
+            : [];
+
+          const parentChannel = (snapshot.parentId || snapshot.parent)
+            ? await guild.channels.fetch(snapshot.parentId || snapshot.parent).catch(() => null)
+            : null;
+
           const restored = await guild.channels.create({
             name: snapshot.name,
             type: snapshot.channelType || snapshot.type,
-            topic: snapshot.topic,
-            nsfw: snapshot.nsfw,
-            parent: snapshot.parentId ? await guild.channels.fetch(snapshot.parentId).catch(() => null) : null,
-            permissionOverwrites: snapshot.permissionOverwrites || []
-          }).catch(() => null);
+            topic: snapshot.topic || undefined,
+            nsfw: Boolean(snapshot.nsfw),
+            parent: parentChannel?.id || undefined,
+            permissionOverwrites: formattedOverwrites
+          }).catch(err => {
+            console.error(`[Security] Failed to recreate channel ${snapshot.name}:`, err.message);
+            return null;
+          });
           if (restored && snapshot.position) await restored.setPosition(snapshot.position).catch(() => null);
           console.log(`[Security] Restored channel: ${restored?.name || snapshot.name}`);
         }
-      }).catch(() => null)
+      })().catch(() => null)
     );
   }
 

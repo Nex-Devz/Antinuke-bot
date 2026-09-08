@@ -542,7 +542,13 @@ export class LunaDatabase {
   }
 
   sumAutoModStatRange(guildId, sinceIso) {
-    return this.#statements.sumAutoModStatRange.get(guildId, sinceIso);
+    const res = this.#statements.sumAutoModStatRange.get(guildId, sinceIso);
+    return {
+      blocked: res?.blocked ?? 0,
+      warnings: res?.warnings ?? 0,
+      timeouts: res?.timeouts ?? 0,
+      alerts: res?.alerts ?? 0
+    };
   }
 
   getGuildConfig(guildId) {
@@ -561,9 +567,28 @@ export class LunaDatabase {
     const modules = {};
     for (const [key, value] of Object.entries(flat)) {
       if (typeof value === 'object' && value !== null && 'enabled' in value) {
-        let name = key.toLowerCase();
-        if (name === 'antirole') name = 'antir\u00f4le';
-        modules[name] = value;
+        modules[key] = value;
+        const lower = key.toLowerCase();
+        modules[lower] = value;
+        if (lower === 'antirole') {
+          modules['antirôle'] = value;
+          modules['antiRole'] = value;
+        }
+        if (lower === 'antiinviterole') {
+          modules['antiinviteRole'] = value;
+          modules['antiinvite-role'] = value;
+        }
+        if (lower === 'antilinkedrole') {
+          modules['antiLinkedRole'] = value;
+          modules['antilinked-role'] = value;
+        }
+        if (lower === 'antiemoji') {
+          modules['antiEmoji'] = value;
+        }
+        if (lower === 'antiadminescalation') {
+          modules['antiadministrator'] = value;
+          modules['antiadmin'] = value;
+        }
       }
     }
     return { guildId, modules };
@@ -641,6 +666,16 @@ export class LunaDatabase {
 
   getLogs(guildId, limit = 50) {
     return this.getIncidents(guildId, limit);
+  }
+
+  getSnapshot(guildId, snapshotKey) {
+    const row = this.#db.prepare("SELECT * FROM security_snapshots WHERE guildId = ? AND resourceId = ? ORDER BY createdAt DESC LIMIT 1").get(guildId, snapshotKey);
+    return row ? { ...row, data: row.snapshot } : null;
+  }
+
+  upsertSnapshot(guildId, snapshotKey, data) {
+    const now = new Date().toISOString();
+    return this.addSecuritySnapshot(guildId, 'generic', snapshotKey, data, now);
   }
 }
 
