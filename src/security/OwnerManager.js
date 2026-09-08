@@ -1,14 +1,15 @@
 export class OwnerManager {
-  constructor(cache, database) {
+  constructor(cache, database, client) {
     this.cache = cache;
     this.database = database;
+    this.client = client;
   }
 
   isOwner(guildId, userId) {
     if (!userId) return false;
     const userStr = String(userId);
 
-    const guild = this.cache?.get?.(`${guildId}:guild`);
+    const guild = this.client?.guilds?.cache?.get(guildId) || this.database?.getGuild?.(guildId);
     if (guild && String(guild.ownerId) === userStr) return true;
 
     return this.isExtraOwner(guildId, userStr);
@@ -17,6 +18,9 @@ export class OwnerManager {
   isExtraOwner(guildId, userId) {
     if (!userId) return false;
     const userStr = String(userId);
+
+    const guild = this.client?.guilds?.cache?.get(guildId) || this.database?.getGuild?.(guildId);
+    if (guild && String(guild.ownerId) === userStr) return true;
 
     // 1. Guild Cache Check
     if (this.cache) {

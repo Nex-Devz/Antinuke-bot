@@ -66,8 +66,8 @@ const incidentEngine = new IncidentEngine(database);
 const punishmentEngine = new PunishmentEngine(client, guildCache);
 const snapshotManager = new SnapshotManager(client, guildCache, database);
 const auditCorrelator = new AuditCorrelator(client, guildCache);
-const whitelistManager = new WhitelistManager(guildCache, database);
-const ownerManager = new OwnerManager(guildCache, database);
+const whitelistManager = new WhitelistManager(guildCache, database, client);
+const ownerManager = new OwnerManager(guildCache, database, client);
 const automodManager = new AutoModManager(client, database, guildCache);
 
 const context = {
@@ -85,7 +85,7 @@ const context = {
 
 registerEvents(client, context);
 
-const PREFIX = '&';
+const PREFIX = '>' || process.env.PREFIX;
 
 function cmdMention(name, subcommand) {
   const id = commandMap.get(name);
