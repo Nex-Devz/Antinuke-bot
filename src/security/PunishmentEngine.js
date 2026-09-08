@@ -2,6 +2,18 @@ export class PunishmentEngine {
   constructor(client, cache) {
     this.client = client;
     this.cache = cache;
+    this.recentBotBans = new Map();
+  }
+
+  isRecentBotBan(guildId, targetId) {
+    const key = `${guildId}:${targetId}`;
+    const expires = this.recentBotBans.get(key);
+    if (!expires) return false;
+    if (Date.now() > expires) {
+      this.recentBotBans.delete(key);
+      return false;
+    }
+    return true;
   }
 
   async #canAct(guild, executorId, member) {
@@ -79,12 +91,15 @@ export class PunishmentEngine {
   async #ban(guild, member, executorId, reason) {
     const target = member || String(executorId || '');
     if (!target) return { success: false, error: 'Target not found' };
+    const targetId = typeof target === 'object' ? target.id : String(target);
 
     try {
+      this.recentBotBans.set(`${guild.id}:${targetId}`, Date.now() + 60000);
       await guild.members.ban(target, { reason: reason || 'Luna: Unauthorized action', deleteMessageSeconds: 0 });
       console.log(`[Security] Banned ${member?.user?.tag || executorId}`);
       return { success: true, error: null };
     } catch (err) {
+      this.recentBotBans.delete(`${guild.id}:${targetId}`);
       return this.#handleDiscordError(err);
     }
   }
