@@ -54,19 +54,36 @@ export class PunishmentEngine {
 
   async punish(guildId, executorId, action, reason) {
     try {
-      const { guild, member } = await this.#fetchGuildAndMember(guildId, executorId);
+      const guild = this.client.guilds.cache.get(guildId);
       if (!guild) return { success: false, error: 'Guild not found' };
 
+      const id = String(executorId || '');
+      if (!id || id === 'unknown' || id === '[object Object]') return { success: false, error: 'Invalid executor' };
+
+      // Immediate owner & bot safeguards
+      if (id === guild.ownerId) return { success: false, error: 'Target is guild owner' };
+      if (id === this.client.user?.id) return { success: false, error: 'Cannot punish bot itself' };
+
+      const act = String(action).toUpperCase().replace(/ /g, '_');
+
+      // FAST PATH: BAN executes immediately by user ID without blocking for member fetch!
+      if (act === 'BAN') {
+        const member = guild.members.cache.get(id) || null;
+        if (member) {
+          const check = await this.#canAct(guild, id, member);
+          if (!check.allowed) return { success: false, error: check.error };
+        }
+        return await this.#ban(guild, member, id, reason);
+      }
+
+      const { member } = await this.#fetchGuildAndMember(guildId, executorId);
       const check = await this.#canAct(guild, executorId, member);
       if (!check.allowed) {
         console.log(`[Security] Punishment blocked: ${check.error}`);
         return { success: false, error: check.error };
       }
 
-      const act = String(action).toUpperCase().replace(/ /g, '_');
       switch (act) {
-        case 'BAN':
-          return await this.#ban(guild, member, executorId, reason);
         case 'KICK':
           return await this.#kick(guild, member, reason);
         case 'TIMEOUT':

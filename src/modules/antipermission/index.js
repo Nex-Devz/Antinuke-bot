@@ -5,6 +5,9 @@ export async function handlePermissionOverwriteCreate(event, context) {
   const config = await database.getConfig(event.guild.id);
   if (!config?.modules?.antipermission?.enabled) return;
 
+  if (!event.executorId) return;
+  if (event.guild.ownerId === event.executorId) return;
+  if (context.client?.user?.id === event.executorId) return;
   if (await whitelistManager.isWhitelisted(event.guild.id, event.executorId)) return;
   if (await ownerManager.isExtraOwner(event.guild.id, event.executorId)) return;
 
@@ -42,6 +45,9 @@ export async function handlePermissionOverwriteDelete(event, context) {
   const config = await database.getConfig(event.guild.id);
   if (!config?.modules?.antipermission?.enabled) return;
 
+  if (!event.executorId) return;
+  if (event.guild.ownerId === event.executorId) return;
+  if (context.client?.user?.id === event.executorId) return;
   if (await whitelistManager.isWhitelisted(event.guild.id, event.executorId)) return;
   if (await ownerManager.isExtraOwner(event.guild.id, event.executorId)) return;
 
@@ -64,6 +70,9 @@ export async function handlePermissionOverwriteUpdate(event, context) {
   const config = await database.getConfig(event.guild.id);
   if (!config?.modules?.antipermission?.enabled) return;
 
+  if (!event.executorId) return;
+  if (event.guild.ownerId === event.executorId) return;
+  if (context.client?.user?.id === event.executorId) return;
   if (await whitelistManager.isWhitelisted(event.guild.id, event.executorId)) return;
   if (await ownerManager.isExtraOwner(event.guild.id, event.executorId)) return;
 

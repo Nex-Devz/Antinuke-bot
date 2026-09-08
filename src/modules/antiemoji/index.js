@@ -11,6 +11,8 @@ export async function handleEmojiCreate(event, context) {
   console.log(`[Security] Emoji created: ${event.emoji.name} in ${guild.name} by ${executorId || 'unknown'}`);
 
   if (!executorId) return;
+  if (guild.ownerId === executorId) return;
+  if (client?.user?.id === executorId) return;
   if (await whitelistManager.isWhitelisted(guildId, executorId)) return;
   if (await ownerManager.isExtraOwner(guildId, executorId)) return;
 
@@ -41,6 +43,8 @@ export async function handleEmojiDelete(event, context) {
   console.log(`[Security] Emoji deleted: ${event.emoji?.name || event.emojiId} in ${guild.name} by ${executorId || 'unknown'}`);
 
   if (!executorId) return;
+  if (guild.ownerId === executorId) return;
+  if (client?.user?.id === executorId) return;
   if (await whitelistManager.isWhitelisted(guildId, executorId)) return;
   if (await ownerManager.isExtraOwner(guildId, executorId)) return;
 
@@ -82,6 +86,8 @@ export async function handleEmojiUpdate(event, context) {
   console.log(`[Security] Emoji updated: ${event.emoji.name} in ${guild.name} by ${executorId || 'unknown'}`);
 
   if (!executorId) return;
+  if (guild.ownerId === executorId) return;
+  if (client?.user?.id === executorId) return;
   if (await whitelistManager.isWhitelisted(guildId, executorId)) return;
   if (await ownerManager.isExtraOwner(guildId, executorId)) return;
 

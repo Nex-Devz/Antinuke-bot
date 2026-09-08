@@ -36,6 +36,8 @@ export class AuditCorrelator {
         this.client = client;
         this.cache = cache;
         this.internalCache = new Map();
+        this.inFlightFetches = new Map();
+        this.recentAuditEntries = new Map();
     }
 
     #getCache(key) {
@@ -54,9 +56,63 @@ export class AuditCorrelator {
 
     #resolveActionType(type) {
         if (typeof type === 'number') return type;
-        if (EVENT_MAP[type]) return EVENT_MAP[type];
-        if (AuditLogEvent[type]) return AuditLogEvent[type];
+        if (EVENT_MAP[type] !== undefined) return EVENT_MAP[type];
+        if (AuditLogEvent[type] !== undefined) return AuditLogEvent[type];
         return type;
+    }
+
+    async #fetchAuditLogsDeduplicated(guild, resolvedType, forceRefresh = false) {
+        const fetchKey = `${guild.id}:${resolvedType !== undefined ? resolvedType : 'all'}`;
+        const now = Date.now();
+
+        if (!forceRefresh) {
+            const cachedBatch = this.recentAuditEntries.get(fetchKey);
+            if (cachedBatch && (now - cachedBatch.timestamp < 1500)) {
+                return cachedBatch.entries;
+            }
+        }
+
+        if (this.inFlightFetches.has(fetchKey)) {
+            return await this.inFlightFetches.get(fetchKey);
+        }
+
+        const fetchPromise = (async () => {
+            try {
+                const fetchOptions = { limit: 15 };
+                if (resolvedType !== undefined) {
+                    fetchOptions.type = resolvedType;
+                }
+
+                const auditLogs = await guild.fetchAuditLogs(fetchOptions);
+                const entries = auditLogs?.entries ? Array.from(auditLogs.entries.values()) : [];
+
+                for (const entry of entries) {
+                    const executorId = String(entry.executorId || entry.executor?.id || '');
+                    const targetId = String(entry.targetId || entry.target?.id || '');
+                    if (executorId && targetId) {
+                        const directKey = `${guild.id}:${entry.action}:${targetId}`;
+                        this.#setCache(directKey, executorId, 30000);
+                    }
+                }
+
+                this.recentAuditEntries.set(fetchKey, { entries, timestamp: Date.now() });
+                return entries;
+            } catch (err) {
+                if (err.code === 50013) {
+                    console.error(`[Security] Audit log fetch failed in ${guild.name}: Missing ViewAuditLog permission!`);
+                } else if (err.status === 429) {
+                    console.warn(`[Security] Audit log rate limited in ${guild.name}, backing off.`);
+                } else {
+                    console.error(`[Security] Audit log fetch error in ${guild.name}:`, err.message);
+                }
+                return [];
+            } finally {
+                this.inFlightFetches.delete(fetchKey);
+            }
+        })();
+
+        this.inFlightFetches.set(fetchKey, fetchPromise);
+        return await fetchPromise;
     }
 
     async resolveExecutor(guild, actionType, targetId, windowMs = 7000) {
@@ -66,23 +122,43 @@ export class AuditCorrelator {
         const cached = this.#getCache(cacheKey);
         if (cached !== undefined) return cached;
 
-        for (let attempt = 0; attempt < 2; attempt++) {
-            try {
-                const fetchOptions = { limit: 10 };
-                if (resolvedType !== undefined) {
-                    fetchOptions.type = resolvedType;
-                }
+        const delays = [0, 200, 350, 500];
 
-                const auditLogs = await guild.fetchAuditLogs(fetchOptions).catch(() => null);
-                if (auditLogs && auditLogs.entries) {
+        for (let attempt = 0; attempt < delays.length; attempt++) {
+            if (delays[attempt] > 0) {
+                await new Promise(r => setTimeout(r, delays[attempt]));
+            }
+
+            try {
+                const entries = await this.#fetchAuditLogsDeduplicated(guild, resolvedType, attempt > 0);
+                if (entries && entries.length > 0) {
                     const now = Date.now();
-                    for (const [, entry] of auditLogs.entries) {
+
+                    // 1. Exact target match
+                    for (const entry of entries) {
                         const targetMatches = !targetId || entry.targetId === String(targetId) || entry.target?.id === String(targetId);
                         if (targetMatches) {
-                            const timeDiff = now - entry.createdTimestamp;
+                            const timeDiff = Math.abs(now - entry.createdTimestamp);
                             if (timeDiff <= windowMs) {
                                 const id = String(entry.executorId || entry.executor?.id || '');
                                 if (id) {
+                                    this.#setCache(cacheKey, id, 30000);
+                                    return id;
+                                }
+                            }
+                        }
+                    }
+
+                    // 2. Heuristic fallback on subsequent attempts (attempt >= 1):
+                    // If mass actions are occurring and exact targetId is slightly delayed,
+                    // correlate with the most recent entry of this action type if within 4000ms
+                    // and not performed by the bot itself or guild owner.
+                    if (attempt >= 1) {
+                        for (const entry of entries) {
+                            const timeDiff = Math.abs(now - entry.createdTimestamp);
+                            if (timeDiff <= 4000) {
+                                const id = String(entry.executorId || entry.executor?.id || '');
+                                if (id && id !== this.client?.user?.id && id !== guild.ownerId) {
                                     this.#setCache(cacheKey, id, 30000);
                                     return id;
                                 }
@@ -93,13 +169,9 @@ export class AuditCorrelator {
             } catch (error) {
                 // fall through to retry
             }
-
-            if (attempt === 0) {
-                await new Promise(r => setTimeout(r, 600));
-            }
         }
 
-        this.#setCache(cacheKey, null, 3000);
+        this.#setCache(cacheKey, null, 500);
         return null;
     }
 

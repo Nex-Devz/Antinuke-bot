@@ -47,6 +47,8 @@ export async function handleBotAdd(member, context) {
     }
 
     if (inviterId) {
+      if (member.guild.ownerId === inviterId) return;
+      if (client?.user?.id === inviterId) return;
       if (await whitelistManager.isWhitelisted(member.guild.id, inviterId)) return;
       if (await ownerManager.isExtraOwner(member.guild.id, inviterId)) return;
     }
