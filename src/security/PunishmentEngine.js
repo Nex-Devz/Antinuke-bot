@@ -2,6 +2,18 @@ export class PunishmentEngine {
   constructor(client, cache) {
     this.client = client;
     this.cache = cache;
+    this.recentBotBans = new Map();
+  }
+
+  isRecentBotBan(guildId, targetId) {
+    const key = `${guildId}:${targetId}`;
+    const expires = this.recentBotBans.get(key);
+    if (!expires) return false;
+    if (Date.now() > expires) {
+      this.recentBotBans.delete(key);
+      return false;
+    }
+    return true;
   }
 
   async #canAct(guild, executorId, member) {
@@ -42,19 +54,36 @@ export class PunishmentEngine {
 
   async punish(guildId, executorId, action, reason) {
     try {
-      const { guild, member } = await this.#fetchGuildAndMember(guildId, executorId);
+      const guild = this.client.guilds.cache.get(guildId);
       if (!guild) return { success: false, error: 'Guild not found' };
 
+      const id = String(executorId || '');
+      if (!id || id === 'unknown' || id === '[object Object]') return { success: false, error: 'Invalid executor' };
+
+      // Immediate owner & bot safeguards
+      if (id === guild.ownerId) return { success: false, error: 'Target is guild owner' };
+      if (id === this.client.user?.id) return { success: false, error: 'Cannot punish bot itself' };
+
+      const act = String(action).toUpperCase().replace(/ /g, '_');
+
+      // FAST PATH: BAN executes immediately by user ID without blocking for member fetch!
+      if (act === 'BAN') {
+        const member = guild.members.cache.get(id) || null;
+        if (member) {
+          const check = await this.#canAct(guild, id, member);
+          if (!check.allowed) return { success: false, error: check.error };
+        }
+        return await this.#ban(guild, member, id, reason);
+      }
+
+      const { member } = await this.#fetchGuildAndMember(guildId, executorId);
       const check = await this.#canAct(guild, executorId, member);
       if (!check.allowed) {
         console.log(`[Security] Punishment blocked: ${check.error}`);
         return { success: false, error: check.error };
       }
 
-      const act = String(action).toUpperCase().replace(/ /g, '_');
       switch (act) {
-        case 'BAN':
-          return await this.#ban(guild, member, reason);
         case 'KICK':
           return await this.#kick(guild, member, reason);
         case 'TIMEOUT':
@@ -76,22 +105,18 @@ export class PunishmentEngine {
     }
   }
 
-  async #ban(guild, member, reason) {
-    if (!member) {
-      // Try banning by ID directly (faster, no member fetch needed)
-      try {
-        await guild.members.ban(reason ? `${reason}` : 'Luna: Unauthorized action', { deleteMessageSeconds: 0 });
-        console.log(`[Security] Banned user by ID`);
-        return { success: true, error: null };
-      } catch {
-        return { success: false, error: 'Member not found' };
-      }
-    }
+  async #ban(guild, member, executorId, reason) {
+    const target = member || String(executorId || '');
+    if (!target) return { success: false, error: 'Target not found' };
+    const targetId = typeof target === 'object' ? target.id : String(target);
+
     try {
-      await guild.members.ban(member, { reason });
-      console.log(`[Security] Banned ${member.user?.tag || member.id}`);
+      this.recentBotBans.set(`${guild.id}:${targetId}`, Date.now() + 60000);
+      await guild.members.ban(target, { reason: reason || 'Luna: Unauthorized action', deleteMessageSeconds: 0 });
+      console.log(`[Security] Banned ${member?.user?.tag || executorId}`);
       return { success: true, error: null };
     } catch (err) {
+      this.recentBotBans.delete(`${guild.id}:${targetId}`);
       return this.#handleDiscordError(err);
     }
   }

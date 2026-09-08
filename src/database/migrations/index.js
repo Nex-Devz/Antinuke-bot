@@ -1,5 +1,5 @@
 import { readdir } from "node:fs/promises";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join } from "node:path";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -12,7 +12,8 @@ export async function getMigrations() {
 
   const migrations = [];
   for (const file of files) {
-    const mod = await import(join(__dirname, file));
+    const fileUrl = pathToFileURL(join(__dirname, file)).href;
+    const mod = await import(fileUrl);
     migrations.push(mod.default);
   }
 

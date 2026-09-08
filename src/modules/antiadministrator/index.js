@@ -76,6 +76,8 @@ export async function handleRoleUpdate(event, context) {
     const executorId = await auditCorrelator.resolveExecutor(newRole.guild, 'ROLE_UPDATE', newRole.id);
     if (!executorId) return;
 
+    if (newRole.guild.ownerId === executorId) return;
+    if (client?.user?.id === executorId) return;
     if (await whitelistManager.isWhitelisted(newRole.guild.id, executorId)) return;
     if (await ownerManager.isExtraOwner(newRole.guild.id, executorId)) return;
 
@@ -126,6 +128,8 @@ export async function handleMemberUpdate(event, context) {
     const executorId = await auditCorrelator.resolveExecutor(newMember.guild, 'MEMBER_ROLE_UPDATE', newMember.id);
     if (!executorId) return;
 
+    if (newMember.guild.ownerId === executorId) return;
+    if (client?.user?.id === executorId) return;
     if (await whitelistManager.isWhitelisted(newMember.guild.id, executorId)) return;
     if (await ownerManager.isExtraOwner(newMember.guild.id, executorId)) return;
 

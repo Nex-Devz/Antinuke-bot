@@ -3,6 +3,16 @@ const EVENT_DELETE_THRESHOLD = 5;
 const RATE_WINDOW = 10_000;
 
 function getEventTracker(cache, guildId) {
+  if (cache && typeof cache.get === 'function') {
+    const state = cache.get(guildId);
+    if (!state.antiScheduledEventTracker) {
+      state.antiScheduledEventTracker = {
+        creates: [],
+        deletes: [],
+      };
+    }
+    return state.antiScheduledEventTracker;
+  }
   const key = 'antiScheduledEvent';
   if (!cache[key]) cache[key] = {};
   if (!cache[key][guildId]) {

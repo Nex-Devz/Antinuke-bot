@@ -11,21 +11,30 @@ export async function handleChannelCreate(event, context) {
   console.log(`[Security] Channel created: ${event.channel.name} in ${guild.name} by ${executorId || 'unknown'}`);
 
   if (!executorId) return;
+  if (guild.ownerId === executorId) return;
+  if (client?.user?.id === executorId) return;
   if (await whitelistManager.isWhitelisted(guildId, executorId)) return;
   if (await ownerManager.isExtraOwner(guildId, executorId)) return;
 
   const actions = config.modules.antichannel.actions || {};
   const reason = 'Luna: Unauthorized channel creation';
 
-  await Promise.all([
-    snapshotManager.takeChannelSnapshot(guildId, event.channel.id).catch(() => null),
-    actions.restore ? event.channel.delete(reason).catch(() => null) : null,
-    actions.punish ? punishmentEngine.punish(guildId, executorId, actions.punish, reason).catch(e => {
-      console.log(`[Security] Failed to punish: ${e.message}`);
-      return null;
-    }) : null,
-    incidentEngine.create(guildId, 'antichannel', 'channel_create', executorId, event.channel.id, 'critical', 80, { channelName: event.channel.name }, 'delete_and_punish')
-  ]);
+  // 1. BAN FIRST (Top Priority)
+  const punishPromise = actions.punish
+    ? punishmentEngine.punish(guildId, executorId, actions.punish, reason).catch(e => {
+        console.log(`[Security] Failed to punish: ${e.message}`);
+        return null;
+      })
+    : Promise.resolve();
+
+  // 2. PARALLEL RECOVERY: Delete the spam channel
+  const recoveryPromise = actions.restore
+    ? event.channel.delete(reason).catch(() => null)
+    : Promise.resolve();
+
+  const incidentPromise = incidentEngine.create(guildId, 'antichannel', 'channel_create', executorId, event.channel.id, 'critical', 80, { channelName: event.channel.name }, 'ban_and_delete');
+
+  await Promise.all([punishPromise, recoveryPromise, incidentPromise]);
 }
 
 export async function handleChannelDelete(event, context) {
@@ -41,42 +50,62 @@ export async function handleChannelDelete(event, context) {
   console.log(`[Security] Channel deleted: ${event.channel.name} in ${guild.name} by ${executorId || 'unknown'}`);
 
   if (!executorId) return;
+  if (guild.ownerId === executorId) return;
+  if (client?.user?.id === executorId) return;
   if (await whitelistManager.isWhitelisted(guildId, executorId)) return;
   if (await ownerManager.isExtraOwner(guildId, executorId)) return;
 
   const actions = config.modules.antichannel.actions || {};
+  const reason = 'Luna: Unauthorized channel deletion';
 
-  const tasks = [
-    incidentEngine.create(guildId, 'antichannel', 'channel_delete', executorId, event.channel.id, 'critical', 85, { channelName: event.channel.name }, 'restore_and_punish')
-  ];
+  // 1. BAN FIRST (Top Priority: neutralize attacker instantly)
+  const punishPromise = actions.punish
+    ? punishmentEngine.punish(guildId, executorId, actions.punish, reason).catch(e => {
+        console.log(`[Security] Failed to punish: ${e.message}`);
+        return null;
+      })
+    : Promise.resolve();
 
-  if (actions.punish) {
-    tasks.push(punishmentEngine.punish(guildId, executorId, actions.punish, 'Luna: Unauthorized channel deletion').catch(e => {
-      console.log(`[Security] Failed to punish: ${e.message}`);
-      return null;
-    }));
-  }
-
-  if (actions.restore) {
-    tasks.push(
-      snapshotManager.getSnapshot(guildId, `channel:${event.channel.id}`).then(async snapshot => {
+  // 2. PARALLEL RECOVERY: Recreate channel from snapshot simultaneously
+  const restorePromise = actions.restore
+    ? (async () => {
+        const snapshot = await snapshotManager.getSnapshot(guildId, `channel:${event.channel.id}`).catch(() => null)
+          || await snapshotManager.getChannelSnapshot?.(guildId, event.channel.id)?.catch?.(() => null);
         if (snapshot) {
+          const rawOverwrites = snapshot.permissionOverwrites || snapshot.overwrites || [];
+          const formattedOverwrites = Array.isArray(rawOverwrites)
+            ? rawOverwrites.map(o => ({
+                id: o.id,
+                type: o.type,
+                allow: BigInt(o.allow || 0n),
+                deny: BigInt(o.deny || 0n)
+              }))
+            : [];
+
+          const parentChannel = (snapshot.parentId || snapshot.parent)
+            ? await guild.channels.fetch(snapshot.parentId || snapshot.parent).catch(() => null)
+            : null;
+
           const restored = await guild.channels.create({
             name: snapshot.name,
             type: snapshot.channelType || snapshot.type,
-            topic: snapshot.topic,
-            nsfw: snapshot.nsfw,
-            parent: snapshot.parentId ? await guild.channels.fetch(snapshot.parentId).catch(() => null) : null,
-            permissionOverwrites: snapshot.permissionOverwrites || []
-          }).catch(() => null);
+            topic: snapshot.topic || undefined,
+            nsfw: Boolean(snapshot.nsfw),
+            parent: parentChannel?.id || undefined,
+            permissionOverwrites: formattedOverwrites
+          }).catch(err => {
+            console.error(`[Security] Failed to recreate channel ${snapshot.name}:`, err.message);
+            return null;
+          });
           if (restored && snapshot.position) await restored.setPosition(snapshot.position).catch(() => null);
           console.log(`[Security] Restored channel: ${restored?.name || snapshot.name}`);
         }
-      }).catch(() => null)
-    );
-  }
+      })().catch(() => null)
+    : Promise.resolve();
 
-  await Promise.all(tasks);
+  const incidentPromise = incidentEngine.create(guildId, 'antichannel', 'channel_delete', executorId, event.channel.id, 'critical', 85, { channelName: event.channel.name }, 'ban_and_restore');
+
+  await Promise.all([punishPromise, restorePromise, incidentPromise]);
 }
 
 export async function handleChannelUpdate(event, context) {
@@ -109,6 +138,8 @@ export async function handleChannelUpdate(event, context) {
   console.log(`[Security] Dangerous permission change in ${event.channel.name} by ${executorId || 'unknown'}`);
 
   if (!executorId) return;
+  if (guild.ownerId === executorId) return;
+  if (client?.user?.id === executorId) return;
   if (await whitelistManager.isWhitelisted(guildId, executorId)) return;
   if (await ownerManager.isExtraOwner(guildId, executorId)) return;
 

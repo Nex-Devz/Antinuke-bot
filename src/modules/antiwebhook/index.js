@@ -7,15 +7,17 @@ export async function handleWebhookUpdate(event, context) {
   const config = await database.getConfig(guildId);
   if (!config?.modules?.antiwebhook?.enabled) return;
 
-  const webhooks = await guild.fetchWebhooks().catch(() => []);
-  if (!webhooks || webhooks.size === 0) return;
+  const webhooks = await guild.fetchWebhooks().catch(() => null);
+  if (!webhooks || !webhooks.size) return;
 
   for (const [, webhook] of webhooks) {
     const executorId = await auditCorrelator.resolveExecutor(guild, 'WEBHOOK_CREATE', webhook.id);
 
     if (!executorId) continue;
-    if (await whitelistManager.isWhitelisted(guildId, executorId)) return;
-    if (await ownerManager.isExtraOwner(guildId, executorId)) return;
+    if (guild.ownerId === executorId) continue;
+    if (client?.user?.id === executorId) continue;
+    if (await whitelistManager.isWhitelisted(guildId, executorId)) continue;
+    if (await ownerManager.isExtraOwner(guildId, executorId)) continue;
 
     console.log(`[Security] Webhook created: ${webhook.name} in ${guild.name} by ${executorId}`);
 

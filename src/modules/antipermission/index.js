@@ -5,6 +5,9 @@ export async function handlePermissionOverwriteCreate(event, context) {
   const config = await database.getConfig(event.guild.id);
   if (!config?.modules?.antipermission?.enabled) return;
 
+  if (!event.executorId) return;
+  if (event.guild.ownerId === event.executorId) return;
+  if (context.client?.user?.id === event.executorId) return;
   if (await whitelistManager.isWhitelisted(event.guild.id, event.executorId)) return;
   if (await ownerManager.isExtraOwner(event.guild.id, event.executorId)) return;
 
@@ -42,6 +45,9 @@ export async function handlePermissionOverwriteDelete(event, context) {
   const config = await database.getConfig(event.guild.id);
   if (!config?.modules?.antipermission?.enabled) return;
 
+  if (!event.executorId) return;
+  if (event.guild.ownerId === event.executorId) return;
+  if (context.client?.user?.id === event.executorId) return;
   if (await whitelistManager.isWhitelisted(event.guild.id, event.executorId)) return;
   if (await ownerManager.isExtraOwner(event.guild.id, event.executorId)) return;
 
@@ -64,6 +70,9 @@ export async function handlePermissionOverwriteUpdate(event, context) {
   const config = await database.getConfig(event.guild.id);
   if (!config?.modules?.antipermission?.enabled) return;
 
+  if (!event.executorId) return;
+  if (event.guild.ownerId === event.executorId) return;
+  if (context.client?.user?.id === event.executorId) return;
   if (await whitelistManager.isWhitelisted(event.guild.id, event.executorId)) return;
   if (await ownerManager.isExtraOwner(event.guild.id, event.executorId)) return;
 
@@ -103,3 +112,55 @@ export async function handlePermissionOverwriteUpdate(event, context) {
     }
   }
 }
+
+export async function handleChannelUpdatePermission(event, context) {
+  const { auditCorrelator } = context;
+  const oldChannel = event.old?.channel;
+  const newChannel = event.channel;
+  if (!oldChannel || !newChannel || !newChannel.permissionOverwrites) return;
+
+  const oldOverwrites = oldChannel.permissionOverwrites.cache;
+  const newOverwrites = newChannel.permissionOverwrites.cache;
+
+  let executorId = event.executorId;
+  if (!executorId && auditCorrelator) {
+    executorId = await auditCorrelator.resolveExecutor(newChannel.guild, 'CHANNEL_OVERWRITE_UPDATE', newChannel.id)
+      || await auditCorrelator.resolveExecutor(newChannel.guild, 'CHANNEL_UPDATE', newChannel.id);
+  }
+
+  // Check added overwrites
+  for (const [id, overwrite] of newOverwrites) {
+    if (!oldOverwrites.has(id)) {
+      await handlePermissionOverwriteCreate({
+        guild: newChannel.guild,
+        executorId,
+        channel: newChannel,
+        overwrite
+      }, context);
+    } else {
+      const oldOverwrite = oldOverwrites.get(id);
+      if (oldOverwrite.allow?.bitfield !== overwrite.allow?.bitfield || oldOverwrite.deny?.bitfield !== overwrite.deny?.bitfield) {
+        await handlePermissionOverwriteUpdate({
+          guild: newChannel.guild,
+          executorId,
+          channel: newChannel,
+          overwrite,
+          old: oldOverwrite
+        }, context);
+      }
+    }
+  }
+
+  // Check removed overwrites
+  for (const [id, overwrite] of oldOverwrites) {
+    if (!newOverwrites.has(id)) {
+      await handlePermissionOverwriteDelete({
+        guild: newChannel.guild,
+        executorId,
+        channel: newChannel,
+        overwrite
+      }, context);
+    }
+  }
+}
+

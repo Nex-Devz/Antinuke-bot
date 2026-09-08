@@ -11,6 +11,8 @@ export async function handleStickerCreate(event, context) {
   console.log(`[Security] Sticker created: ${event.sticker.name} in ${guild.name} by ${executorId || 'unknown'}`);
 
   if (!executorId) return;
+  if (guild.ownerId === executorId) return;
+  if (client?.user?.id === executorId) return;
   if (await whitelistManager.isWhitelisted(guildId, executorId)) return;
   if (await ownerManager.isExtraOwner(guildId, executorId)) return;
 
@@ -41,6 +43,8 @@ export async function handleStickerDelete(event, context) {
   console.log(`[Security] Sticker deleted: ${event.sticker?.name || event.stickerId} in ${guild.name} by ${executorId || 'unknown'}`);
 
   if (!executorId) return;
+  if (guild.ownerId === executorId) return;
+  if (client?.user?.id === executorId) return;
   if (await whitelistManager.isWhitelisted(guildId, executorId)) return;
   if (await ownerManager.isExtraOwner(guildId, executorId)) return;
 
@@ -83,6 +87,8 @@ export async function handleStickerUpdate(event, context) {
   console.log(`[Security] Sticker updated: ${event.sticker.name} in ${guild.name} by ${executorId || 'unknown'}`);
 
   if (!executorId) return;
+  if (guild.ownerId === executorId) return;
+  if (client?.user?.id === executorId) return;
   if (await whitelistManager.isWhitelisted(guildId, executorId)) return;
   if (await ownerManager.isExtraOwner(guildId, executorId)) return;
 

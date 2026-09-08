@@ -54,7 +54,8 @@ export async function handleAutoModRuleCreate(event, context) {
 
     const executorId = await auditCorrelator.resolveExecutor(rule.guild, 'AUTO_MODERATION_RULE_CREATE', rule.id).catch(() => null);
     if (!executorId) return;
-
+    if (rule.guild.ownerId === executorId) return;
+    if (client?.user?.id === executorId) return;
     if (await whitelistManager.isWhitelisted(rule.guild.id, executorId)) return;
     if (await ownerManager.isExtraOwner(rule.guild.id, executorId)) return;
 
@@ -97,7 +98,8 @@ export async function handleAutoModRuleUpdate(oldRule, newRule, context) {
 
     const executorId = await auditCorrelator.resolveExecutor(newRule.guild, 'AUTO_MODERATION_RULE_UPDATE', newRule.id).catch(() => null);
     if (!executorId) return;
-
+    if (newRule.guild.ownerId === executorId) return;
+    if (client?.user?.id === executorId) return;
     if (await whitelistManager.isWhitelisted(newRule.guild.id, executorId)) return;
     if (await ownerManager.isExtraOwner(newRule.guild.id, executorId)) return;
 
@@ -161,7 +163,8 @@ export async function handleAutoModRuleDelete(event, context) {
 
     const executorId = await auditCorrelator.resolveExecutor(rule.guild, 'AUTO_MODERATION_RULE_DELETE', rule.id).catch(() => null);
     if (!executorId) return;
-
+    if (rule.guild.ownerId === executorId) return;
+    if (client?.user?.id === executorId) return;
     if (await whitelistManager.isWhitelisted(rule.guild.id, executorId)) return;
     if (await ownerManager.isExtraOwner(rule.guild.id, executorId)) return;
 

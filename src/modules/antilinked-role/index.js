@@ -17,13 +17,16 @@ const DANGEROUS_PERMS = [
 ];
 
 function isLinkedRole(role) {
-  if (!role?.tags) return false;
+  if (!role || !role.tags) return false;
   const tags = role.tags;
-  if (tags.bot_id || tags.integration_id) return false;
-  if (tags.premium_subscriber !== undefined) return false;
-  if (tags.available_for_purchase !== undefined) return false;
-  if (tags.guild_connections !== undefined) return false;
-  return Object.keys(tags).length > 0;
+
+  // Explicitly ignore bot managed roles, integrations, booster roles, subscriptions
+  if (tags.botId || tags.bot_id || tags.integrationId || tags.integration_id) return false;
+  if (tags.premiumSubscriberRole || tags.premium_subscriber !== undefined) return false;
+  if (tags.subscriptionListingId || tags.available_for_purchase !== undefined) return false;
+
+  // Linked roles in Discord are identified exclusively by the guildConnections / guild_connections tag
+  return Boolean(tags.guildConnections === true || tags.guildConnections !== undefined || 'guild_connections' in tags || tags.guild_connections !== undefined);
 }
 
 function hasDangerousPerms(permissions) {
@@ -65,7 +68,7 @@ export async function handleRoleCreate(event, context) {
 }
 
 export async function handleRoleUpdate(event, context) {
-  const { cache, database, incidentEngine, whitelistManager, ownerManager } = context;
+  const { cache, database, incidentEngine, whitelistManager, ownerManager, auditCorrelator } = context;
   const { guild, role, oldRole } = event;
   if (!guild || !role || !oldRole) return;
 
@@ -79,8 +82,12 @@ export async function handleRoleUpdate(event, context) {
   const dangerous = hasDangerousPerms(role.permissions);
   if (dangerous.length === 0) return;
 
-  const executorId = role.manager?.id;
+  let executorId = null;
+  if (auditCorrelator) {
+    executorId = await auditCorrelator.resolveExecutor(guild, 'ROLE_UPDATE', role.id);
+  }
   if (executorId) {
+    if (guild.ownerId === executorId) return;
     if (await whitelistManager.isWhitelisted(guild.id, executorId)) return;
     if (await ownerManager.isExtraOwner(guild.id, executorId)) return;
   }

@@ -41,16 +41,14 @@ export async function handleBotAdd(member, context) {
 
     let inviterId = null;
     try {
-      const auditLogs = await member.guild.fetchAuditLogs({ type: 'BOT_ADD', limit: 1 });
-      const entry = auditLogs.entries.first();
-      if (entry && entry.target.id === member.id) {
-        inviterId = entry.executor?.id;
-      }
+      inviterId = await auditCorrelator.resolveExecutor(member.guild, 'BOT_ADD', member.id);
     } catch {
       // ignore
     }
 
     if (inviterId) {
+      if (member.guild.ownerId === inviterId) return;
+      if (client?.user?.id === inviterId) return;
       if (await whitelistManager.isWhitelisted(member.guild.id, inviterId)) return;
       if (await ownerManager.isExtraOwner(member.guild.id, inviterId)) return;
     }

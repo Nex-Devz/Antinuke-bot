@@ -1,55 +1,97 @@
 export class OwnerManager {
-  constructor(cache, database) {
+  constructor(cache, database, client) {
     this.cache = cache;
     this.database = database;
+    this.client = client;
   }
 
   isOwner(guildId, userId) {
-    const guild = this.cache.get(`${guildId}:guild`);
-    if (guild && guild.ownerId === userId) return true;
+    if (!userId) return false;
+    const userStr = String(userId);
 
-    const raw = this.cache.get(`${guildId}:owners`);
-    const owners = Array.isArray(raw) ? raw : [];
-    return owners.some(o => o.userId === userId);
+    const guild = this.client?.guilds?.cache?.get(guildId) || this.database?.getGuild?.(guildId);
+    if (guild && String(guild.ownerId) === userStr) return true;
+
+    return this.isExtraOwner(guildId, userStr);
   }
 
   isExtraOwner(guildId, userId) {
-    const raw = this.cache.get(`${guildId}:owners`);
-    const owners = Array.isArray(raw) ? raw : [];
-    return owners.some(o => o.userId === userId);
+    if (!userId) return false;
+    const userStr = String(userId);
+
+    const guild = this.client?.guilds?.cache?.get(guildId) || this.database?.getGuild?.(guildId);
+    if (guild && String(guild.ownerId) === userStr) return true;
+
+    // 1. Guild Cache Check
+    if (this.cache) {
+      const state = typeof this.cache.get === 'function' ? this.cache.get(guildId) : null;
+      if (state?.extraOwners instanceof Set && state.extraOwners.has(userStr)) {
+        return true;
+      }
+
+      const raw = this.cache.get?.(`${guildId}:owners`);
+      if (Array.isArray(raw) && raw.some(o => String(o.userId) === userStr)) {
+        return true;
+      }
+    }
+
+    // 2. Database Fallback
+    if (this.database?.getExtraOwners) {
+      try {
+        const rows = this.database.getExtraOwners(guildId);
+        if (Array.isArray(rows) && rows.some(o => String(o.userId) === userStr)) {
+          return true;
+        }
+      } catch (err) {
+        console.error(`[Security] Owner DB check error:`, err.message);
+      }
+    }
+
+    return false;
   }
 
   async add(guildId, userId, addedBy) {
     try {
-      const cacheKey = `${guildId}:owners`;
-      let owners = this.cache.get(cacheKey) || [];
+      const userStr = String(userId);
+      const now = Date.now();
 
-      if (owners.some(o => o.userId === userId)) {
+      if (this.isExtraOwner(guildId, userStr)) {
         return { success: false, error: 'User is already an extra owner' };
       }
 
-      const entry = {
-        guildId,
-        userId,
-        addedBy,
-        addedAt: Date.now()
-      };
-
-      owners.push(entry);
-      this.cache.set(cacheKey, owners);
-
-      try {
-        await this.database?.upsert?.('extra_owners', {
-          guildId,
-          userId,
-          addedBy,
-          addedAt: entry.addedAt
-        });
-      } catch (err) {
-        console.error(`[Security] Owner DB write error:`, err.message);
+      // Update Database
+      if (this.database?.addExtraOwner) {
+        try {
+          this.database.addExtraOwner(guildId, userStr, addedBy || 'system', now);
+        } catch (dbErr) {
+          console.error(`[Security] Owner DB add error:`, dbErr.message);
+        }
       }
 
-      console.log(`[Security] Extra owner added: ${userId} in guild ${guildId}`);
+      // Update GuildCache
+      if (this.cache) {
+        const state = typeof this.cache.get === 'function' ? this.cache.get(guildId) : null;
+        if (state?.extraOwners instanceof Set) {
+          state.extraOwners.add(userStr);
+        }
+
+        const cacheKey = `${guildId}:owners`;
+        let owners = this.cache.get?.(cacheKey);
+        if (!Array.isArray(owners)) owners = [];
+
+        owners.push({
+          guildId,
+          userId: userStr,
+          addedBy,
+          addedAt: now
+        });
+
+        if (typeof this.cache.set === 'function') {
+          this.cache.set(cacheKey, owners);
+        }
+      }
+
+      console.log(`[Security] Extra owner added: ${userStr} in guild ${guildId}`);
       return { success: true, error: null };
     } catch (err) {
       console.error(`[Security] Owner add error:`, err.message);
@@ -59,19 +101,35 @@ export class OwnerManager {
 
   async remove(guildId, userId) {
     try {
-      const cacheKey = `${guildId}:owners`;
-      let owners = this.cache.get(cacheKey) || [];
+      const userStr = String(userId);
 
-      owners = owners.filter(o => o.userId !== userId);
-      this.cache.set(cacheKey, owners);
-
-      try {
-        await this.database?.delete?.('extra_owners', { guildId, userId });
-      } catch (err) {
-        console.error(`[Security] Owner DB delete error:`, err.message);
+      // Update Database
+      if (this.database?.removeExtraOwner) {
+        try {
+          this.database.removeExtraOwner(guildId, userStr);
+        } catch (dbErr) {
+          console.error(`[Security] Owner DB remove error:`, dbErr.message);
+        }
       }
 
-      console.log(`[Security] Extra owner removed: ${userId} from guild ${guildId}`);
+      // Update GuildCache
+      if (this.cache) {
+        const state = typeof this.cache.get === 'function' ? this.cache.get(guildId) : null;
+        if (state?.extraOwners instanceof Set) {
+          state.extraOwners.delete(userStr);
+        }
+
+        const cacheKey = `${guildId}:owners`;
+        let owners = this.cache.get?.(cacheKey);
+        if (Array.isArray(owners)) {
+          owners = owners.filter(o => String(o.userId) !== userStr);
+          if (typeof this.cache.set === 'function') {
+            this.cache.set(cacheKey, owners);
+          }
+        }
+      }
+
+      console.log(`[Security] Extra owner removed: ${userStr} from guild ${guildId}`);
       return { success: true, error: null };
     } catch (err) {
       console.error(`[Security] Owner remove error:`, err.message);
@@ -80,24 +138,54 @@ export class OwnerManager {
   }
 
   getList(guildId) {
-    return this.cache.get(`${guildId}:owners`) || [];
+    const raw = this.cache?.get?.(`${guildId}:owners`);
+    if (Array.isArray(raw) && raw.length > 0) return raw;
+
+    if (this.database?.getExtraOwners) {
+      try {
+        const rows = this.database.getExtraOwners(guildId);
+        if (Array.isArray(rows)) {
+          return rows.map(row => ({
+            guildId: row.guildId,
+            userId: row.userId,
+            addedBy: row.addedBy,
+            addedAt: row.createdAt || row.addedAt
+          }));
+        }
+      } catch (err) {
+        console.error(`[Security] Owner getList DB error:`, err.message);
+      }
+    }
+
+    return [];
   }
 
   async loadGuild(guildId) {
     try {
-      const rows = await this.database?.all?.('extra_owners', { guildId }) || [];
+      const rows = (this.database?.getExtraOwners ? this.database.getExtraOwners(guildId) : []) || [];
 
       const owners = rows.map(row => ({
         guildId: row.guildId,
         userId: row.userId,
         addedBy: row.addedBy,
-        addedAt: row.addedAt
+        addedAt: row.createdAt || row.addedAt
       }));
 
-      this.cache.set(`${guildId}:owners`, owners);
+      if (typeof this.cache?.set === 'function') {
+        this.cache.set(`${guildId}:owners`, owners);
+      }
+
+      const state = typeof this.cache?.get === 'function' ? this.cache.get(guildId) : null;
+      if (state?.extraOwners instanceof Set) {
+        for (const o of owners) {
+          state.extraOwners.add(o.userId);
+        }
+      }
+
       console.log(`[Security] Loaded ${owners.length} extra owners for guild ${guildId}`);
     } catch (err) {
       console.error(`[Security] Owner load error for guild ${guildId}:`, err.message);
     }
   }
 }
+

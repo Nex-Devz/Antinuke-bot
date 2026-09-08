@@ -66,8 +66,8 @@ const incidentEngine = new IncidentEngine(database);
 const punishmentEngine = new PunishmentEngine(client, guildCache);
 const snapshotManager = new SnapshotManager(client, guildCache, database);
 const auditCorrelator = new AuditCorrelator(client, guildCache);
-const whitelistManager = new WhitelistManager(guildCache, database);
-const ownerManager = new OwnerManager(guildCache, database);
+const whitelistManager = new WhitelistManager(guildCache, database, client);
+const ownerManager = new OwnerManager(guildCache, database, client);
 const automodManager = new AutoModManager(client, database, guildCache);
 
 const context = {
@@ -85,7 +85,7 @@ const context = {
 
 registerEvents(client, context);
 
-const PREFIX = '&';
+const PREFIX = '>' || process.env.PREFIX;
 
 function cmdMention(name, subcommand) {
   const id = commandMap.get(name);
@@ -139,6 +139,13 @@ client.on(Events.InteractionCreate, async (interaction) => {
             config[k].enabled = true;
           }
         });
+        if (config.modules && typeof config.modules === 'object') {
+          Object.keys(config.modules).forEach(k => {
+            if (typeof config.modules[k] === 'object' && config.modules[k] !== null && 'enabled' in config.modules[k]) {
+              config.modules[k].enabled = true;
+            }
+          });
+        }
         database.upsertSecurityConfig(guildId, config, new Date().toISOString());
 
         const guild = interaction.guild;
@@ -154,10 +161,12 @@ client.on(Events.InteractionCreate, async (interaction) => {
             database.setProtectedChannels(guildId, channel.id, interaction.user.id, now);
             cache.get(guildId).protectedChannels.add(channel.id);
           });
-          guild.invites.cache.forEach(invite => {
-            database.setProtectedWebhooks(guildId, invite.code, invite.url || '', interaction.user.id, now);
-            cache.get(guildId).protectedWebhooks.add(invite.code);
-          });
+          guild.fetchWebhooks().then(webhooks => {
+            webhooks.forEach(webhook => {
+              database.setProtectedWebhooks(guildId, webhook.id, webhook.url || '', interaction.user.id, now);
+              cache.get(guildId).protectedWebhooks.add(webhook.id);
+            });
+          }).catch(() => null);
         }
 
         cache.get(guildId).config = config;
@@ -192,6 +201,13 @@ client.on(Events.InteractionCreate, async (interaction) => {
             config[k].enabled = false;
           }
         });
+        if (config.modules && typeof config.modules === 'object') {
+          Object.keys(config.modules).forEach(k => {
+            if (typeof config.modules[k] === 'object' && config.modules[k] !== null && 'enabled' in config.modules[k]) {
+              config.modules[k].enabled = false;
+            }
+          });
+        }
         database.upsertSecurityConfig(guildId, config, new Date().toISOString());
         cache.get(guildId).config = config;
         const state = cache.get(guildId);
@@ -211,7 +227,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
         const config = database.getGuildConfig(guildId);
         const state = cache.get(guildId);
         state.client = interaction.client;
-        const enabled = config && Object.values(config).some(v => typeof v === 'object' && v !== null && v.enabled === true);
+        const cfgModules = config?.modules || config || {};
+        const enabled = Object.values(cfgModules).some(v => typeof v === 'object' && v !== null && v.enabled === true);
         const container = buildStatusContainer(config, state, enabled);
         return interaction.update({ components: [container], flags: 32768 });
       }
@@ -441,28 +458,34 @@ client.on(Events.ClientReady, async () => {
   await onReady(client, context);
 });
 
-const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
-
 const commandMap = new Map();
 
-try {
-  console.log('[Luna] Registering slash commands...');
-  await rest.put(Routes.applicationCommands(process.env.CLIENT_ID), {
-    body: [...commandDefinitions, automodCommand.toJSON()]
-  });
-  console.log('[Luna] Slash commands registered');
+if (!process.env.TOKEN) {
+  console.warn('[Luna] ⚠️  WARNING: No TOKEN found in process.env. Please create a .env file with TOKEN and CLIENT_ID to connect to Discord.');
+} else {
+  const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
 
-  const registered = await rest.get(Routes.applicationCommands(process.env.CLIENT_ID));
-  for (const cmd of registered) {
-    commandMap.set(cmd.name, cmd.id);
+  if (process.env.CLIENT_ID) {
+    try {
+      console.log('[Luna] Registering slash commands...');
+      await rest.put(Routes.applicationCommands(process.env.CLIENT_ID), {
+        body: [...commandDefinitions, automodCommand.toJSON()]
+      });
+      console.log('[Luna] Slash commands registered');
+
+      const registered = await rest.get(Routes.applicationCommands(process.env.CLIENT_ID));
+      for (const cmd of registered) {
+        commandMap.set(cmd.name, cmd.id);
+      }
+      console.log(`[Luna] Command IDs mapped: ${[...commandMap.entries()].map(([n, id]) => `${n}:${id}`).join(', ')}`);
+    } catch (error) {
+      console.error('[Luna] Failed to register slash commands:', error);
+    }
   }
-  console.log(`[Luna] Command IDs mapped: ${[...commandMap.entries()].map(([n, id]) => `${n}:${id}`).join(', ')}`);
-} catch (error) {
-  console.error('[Luna] Failed to register slash commands:', error);
-}
 
-console.log('[Luna] Logging in...');
-await client.login(process.env.TOKEN);
+  console.log('[Luna] Logging in...');
+  await client.login(process.env.TOKEN);
+}
 
 process.on('unhandledRejection', (error) => {
   console.error('[Luna] Unhandled rejection:', error);

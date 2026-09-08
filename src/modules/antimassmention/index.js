@@ -10,11 +10,13 @@ export async function handleMessageCreate(message, context) {
   if (await ownerManager.isExtraOwner(message.guild.id, message.author.id)) return;
 
   const mentions = message.mentions;
-  if (!mentions || mentions.users.size === 0) return;
+  const userMentionCount = mentions?.users?.size || 0;
+  const roleMentionCount = mentions?.roles?.size || 0;
+  const hasEveryoneMention = Boolean(mentions?.everyone || message.content?.includes('@everyone') || message.content?.includes('@here'));
 
-  const hasEveryoneMention = message.content.includes('@everyone') || message.content.includes('@here');
+  if (!hasEveryoneMention && userMentionCount === 0 && roleMentionCount === 0) return;
 
-  const state = cache.get(message.guild.id);
+  const state = cache.get(message.guild.id) || {};
   if (!state.massMentionTracker) state.massMentionTracker = {};
 
   const channelId = message.channel.id;
@@ -26,13 +28,22 @@ export async function handleMessageCreate(message, context) {
   const window = config.modules.antimassmention.window || 10000;
   const threshold = config.modules.antimassmention.threshold || 5;
 
-  state.massMentionTracker[channelId].push({ timestamp: now, authorId: message.author.id, hasEveryoneMention });
+  const totalMentionsInMsg = (hasEveryoneMention ? 5 : 0) + userMentionCount + roleMentionCount;
+
+  state.massMentionTracker[channelId].push({
+    timestamp: now,
+    authorId: message.author.id,
+    hasEveryoneMention,
+    mentionCount: totalMentionsInMsg
+  });
   state.massMentionTracker[channelId] = state.massMentionTracker[channelId].filter(entry => now - entry.timestamp < window);
 
-  const everyoneMentions = state.massMentionTracker[channelId].filter(entry => entry.hasEveryoneMention);
+  const authorEntries = state.massMentionTracker[channelId].filter(entry => entry.authorId === message.author.id);
+  const totalRecentMentions = authorEntries.reduce((sum, e) => sum + (e.mentionCount || 1), 0);
+  const everyoneMentions = authorEntries.filter(entry => entry.hasEveryoneMention);
 
-  if (everyoneMentions.length >= threshold) {
-    const risk = Math.min(20 + everyoneMentions.length * 10, 100);
+  if (everyoneMentions.length >= threshold || totalRecentMentions >= threshold) {
+    const risk = Math.min(30 + Math.max(everyoneMentions.length * 10, totalRecentMentions * 5), 100);
     console.log(`[Security] Mass mention abuse in ${message.guild.name} (risk: ${risk})`);
 
     try {

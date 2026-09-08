@@ -71,7 +71,7 @@ function calculateRiskScore(executor, target, roles, eventType) {
   let risk = 0;
 
   for (const roleId of roles) {
-    const role = target.guild?.roles?.cache.get(roleId);
+    const role = target?.guild?.roles?.cache?.get(roleId);
     if (!role) continue;
 
     const permissions = getPermissionNames(role.permissions);
@@ -83,7 +83,10 @@ function calculateRiskScore(executor, target, roles, eventType) {
     }
   }
 
-  if (executor.id === target.id) {
+  const executorId = typeof executor === 'object' ? executor?.id : String(executor || '');
+  const targetId = typeof target === 'object' ? target?.id : String(target || '');
+
+  if (executorId && targetId && executorId === targetId) {
     risk += 10;
   }
 
@@ -130,7 +133,7 @@ export async function handleMemberUpdate(event, context) {
 
     if (addedRoles.size > 0) {
       const addedRoleIds = [...addedRoles.values()].map(r => r.id);
-      const riskScore = calculateRiskScore(executor, newMember, addedRoleIds, 'ADD');
+      const riskScore = calculateRiskScore(executorId, newMember, addedRoleIds, 'ADD');
 
       const dangerousAdded = addedRoles.filter(r => {
         const perms = getPermissionNames(r.permissions);
@@ -161,7 +164,7 @@ export async function handleMemberUpdate(event, context) {
 
     if (removedRoles.size > 0) {
       const removedRoleIds = [...removedRoles.values()].map(r => r.id);
-      const riskScore = calculateRiskScore(executor, newMember, removedRoleIds, 'REMOVE');
+      const riskScore = calculateRiskScore(executorId, newMember, removedRoleIds, 'REMOVE');
 
       if (riskScore >= 50) {
         console.log(`[Security] Suspicious role removal: ${executorId} removed ${removedRoles.size} roles from ${newMember.id}`);

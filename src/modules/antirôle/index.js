@@ -11,21 +11,30 @@ export async function handleRoleCreate(event, context) {
   console.log(`[Security] Role created: ${event.role.name} in ${guild.name} by ${executorId || 'unknown'}`);
 
   if (!executorId) return;
+  if (guild.ownerId === executorId) return;
+  if (client?.user?.id === executorId) return;
   if (await whitelistManager.isWhitelisted(guildId, executorId)) return;
   if (await ownerManager.isExtraOwner(guildId, executorId)) return;
 
   const actions = config.modules.antirôle.actions || {};
   const reason = 'Luna: Unauthorized role creation';
 
-  await Promise.all([
-    snapshotManager.takeRoleSnapshot(guildId, event.role.id).catch(() => null),
-    actions.restore ? event.role.delete(reason).catch(() => null) : null,
-    actions.punish ? punishmentEngine.punish(guildId, executorId, actions.punish, reason).catch(e => {
-      console.log(`[Security] Failed to punish: ${e.message}`);
-      return null;
-    }) : null,
-    incidentEngine.create(guildId, 'antirôle', 'role_create', executorId, event.role.id, 'critical', 70, { roleName: event.role.name }, 'delete_and_punish')
-  ]);
+  // 1. BAN FIRST
+  const punishPromise = actions.punish
+    ? punishmentEngine.punish(guildId, executorId, actions.punish, reason).catch(e => {
+        console.log(`[Security] Failed to punish: ${e.message}`);
+        return null;
+      })
+    : Promise.resolve();
+
+  // 2. PARALLEL RECOVERY: Delete unauthorized role
+  const recoveryPromise = actions.restore
+    ? event.role.delete(reason).catch(() => null)
+    : Promise.resolve();
+
+  const incidentPromise = incidentEngine.create(guildId, 'antirôle', 'role_create', executorId, event.role.id, 'critical', 70, { roleName: event.role.name }, 'ban_and_delete');
+
+  await Promise.all([punishPromise, recoveryPromise, incidentPromise]);
 }
 
 export async function handleRoleDelete(event, context) {
@@ -41,42 +50,43 @@ export async function handleRoleDelete(event, context) {
   console.log(`[Security] Role deleted: ${event.role.name} in ${guild.name} by ${executorId || 'unknown'}`);
 
   if (!executorId) return;
+  if (guild.ownerId === executorId) return;
+  if (client?.user?.id === executorId) return;
   if (await whitelistManager.isWhitelisted(guildId, executorId)) return;
   if (await ownerManager.isExtraOwner(guildId, executorId)) return;
 
   const actions = config.modules.antirôle.actions || {};
 
-  const tasks = [
-    incidentEngine.create(guildId, 'antirôle', 'role_delete', executorId, event.role.id, 'critical', 80, { roleName: event.role.name }, 'restore_and_punish')
-  ];
+  // 1. BAN FIRST
+  const punishPromise = actions.punish
+    ? punishmentEngine.punish(guildId, executorId, actions.punish, 'Luna: Unauthorized role deletion').catch(e => {
+        console.log(`[Security] Failed to punish: ${e.message}`);
+        return null;
+      })
+    : Promise.resolve();
 
-  if (actions.punish) {
-    tasks.push(punishmentEngine.punish(guildId, executorId, actions.punish, 'Luna: Unauthorized role deletion').catch(e => {
-      console.log(`[Security] Failed to punish: ${e.message}`);
-      return null;
-    }));
-  }
-
-  if (actions.restore) {
-    const snap = await snapshotManager.getSnapshot(guildId, `role:${event.role.id}`).catch(() => null);
-    if (snap) {
-      tasks.push(
-        guild.roles.create({
-          name: snap.name,
-          color: snap.color,
-          hoist: snap.hoist,
-          mentionable: snap.mentionable,
-          permissions: BigInt(snap.permissions),
-          reason: 'Luna: Restoring deleted role'
-        }).catch(() => null).then(restored => {
-          if (restored && snap.position) restored.setPosition(snap.position).catch(() => null);
+  // 2. PARALLEL RECOVERY: Restore role from snapshot
+  const restorePromise = actions.restore
+    ? (async () => {
+        const snap = await snapshotManager.getSnapshot(guildId, `role:${event.role.id}`).catch(() => null);
+        if (snap) {
+          const restored = await guild.roles.create({
+            name: snap.name,
+            color: snap.color,
+            hoist: snap.hoist,
+            mentionable: snap.mentionable,
+            permissions: BigInt(snap.permissions || 0n),
+            reason: 'Luna: Restoring deleted role'
+          }).catch(() => null);
+          if (restored && snap.position) await restored.setPosition(snap.position).catch(() => null);
           console.log(`[Security] Restored role: ${restored?.name || snap.name}`);
-        })
-      );
-    }
-  }
+        }
+      })()
+    : Promise.resolve();
 
-  await Promise.all(tasks);
+  const incidentPromise = incidentEngine.create(guildId, 'antirôle', 'role_delete', executorId, event.role.id, 'critical', 80, { roleName: event.role.name }, 'ban_and_restore');
+
+  await Promise.all([punishPromise, restorePromise, incidentPromise]);
 }
 
 export async function handleRoleUpdate(event, context) {
@@ -99,6 +109,8 @@ export async function handleRoleUpdate(event, context) {
   console.log(`[Security] Role updated: ${event.role.name} in ${guild.name} by ${executorId || 'unknown'} (admin escalated: ${hasDangerous})`);
 
   if (!executorId) return;
+  if (guild.ownerId === executorId) return;
+  if (client?.user?.id === executorId) return;
   if (await whitelistManager.isWhitelisted(guildId, executorId)) return;
   if (await ownerManager.isExtraOwner(guildId, executorId)) return;
 
