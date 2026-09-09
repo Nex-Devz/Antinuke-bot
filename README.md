@@ -1,6 +1,6 @@
 <div align="center">
 
-# Lune
+# Lune .
 
 ### Discord Anti-Nuke & Anti-Abuse Security Bot
 
